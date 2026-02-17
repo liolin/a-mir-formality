@@ -1,8 +1,8 @@
 //! Checks for simple syntactic criteria like "all identifiers are valid"
 //! that the rest of the code would prefer to just assume hold.
 
-use formality_core::judgment_fn;
 use crate::grammar::minirust::Terminator;
+use formality_core::judgment_fn;
 
 use crate::check::mini_rust_check::TypeckEnv;
 

@@ -540,10 +540,10 @@ judgment_fn! {
                 //                               whatever comes after this structure value (`...`).
                 (let places_live_before_value = values[i+1..].live_before(&env, &places_live))
                 (borrow_check_argument_expression(
-                    &env, 
-                    &assumptions, 
-                    loans_live, 
-                    outlives, 
+                    &env,
+                    &assumptions,
+                    loans_live,
+                    outlives,
                     &values[i],
                     places_live_before_value,
                 ) => (argument_ty, outlives, loans_live))
