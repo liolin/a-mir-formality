@@ -268,6 +268,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "formality-driver"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "formality-rust",
+]
+
+[[package]]
 name = "formality-macros"
 version = "0.1.0"
 dependencies = [

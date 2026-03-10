@@ -1,0 +1,22 @@
+[package]
+name = "formality-driver"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = ""
+homepage = "https://rust-lang.github.io/a-mir-formality/"
+repository = "https://github.com/rust-lang/a-mir-formality/"
+readme = "README.md"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1"
+formality-rust = { path = "../formality-rust" }
+
+[dev-dependencies]
+
+[package.metadata.rust-analyzer]
+# This crate uses rustc crates.
+# More info: https://github.com/rust-analyzer/rust-analyzer/pull/7891
+rustc_private = true
