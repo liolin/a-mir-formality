@@ -9,9 +9,9 @@ pub fn compile_local_crate() -> ControlFlow<anyhow::Result<String>> {
     let krate = rustc_public::local_crate();
     let items = rustc_public::all_local_items();
 
-    let result = write!(&mut code, "[ ")
+    let result = writeln!(&mut code, "[")
         .and_then(|()| compile_crate(&mut code, &krate, items))
-        .and_then(|()| write!(&mut code, " ]"));
+        .and_then(|()| writeln!(&mut code, "]"));
 
     if let Err(error) = result {
         return std::ops::ControlFlow::Break(Err(anyhow::anyhow!(error)));
@@ -25,7 +25,7 @@ fn compile_crate<W: Write>(
     krate: &rustc_public::Crate,
     items: rustc_public::CrateItems,
 ) -> fmt::Result {
-    write!(w, "crate {} {{ ", krate.name)?;
+    writeln!(w, "crate {} {{", krate.name)?;
 
     let first_error = items
         .into_iter()
@@ -36,7 +36,7 @@ fn compile_crate<W: Write>(
         return err;
     }
 
-    write!(w, "}}")
+    writeln!(w, "}}")
 }
 
 fn compile_crate_item<W: Write>(w: &mut W, crate_item: rustc_public::CrateItem) -> fmt::Result {
@@ -58,7 +58,16 @@ fn compile_fn<W: Write>(w: &mut W, crate_item: rustc_public::CrateItem) -> fmt::
         write!(w, "{}{}", sep, local.ty)?;
         sep = ", ";
     }
-    write!(w, ")")?;
+    // TODO: Where clauses
+    write!(w, ") -> {}", body.ret_local().ty)?;
+    compile_fn_body(w, body)?;
+
+    Ok(())
+}
+
+fn compile_fn_body<W: Write>(w: &mut W, body: rustc_public::mir::Body) -> fmt::Result {
+    write!(w, " = minirust() -> v0")?;
+    // todo!()
     Ok(())
 }
 
@@ -100,6 +109,22 @@ mod tests {
             std::ops::ControlFlow::Break(code)
         })
         .unwrap();
-        assert_eq!(code, "crate main { }".to_string());
+        assert_eq!(code, "crate main {\n}\n".to_string());
+    }
+
+    #[test]
+    fn test_simple_fn() {
+        let code = compile("fn run() -> () { }", || {
+            let mut code = String::new();
+            let krate = rustc_public::local_crate();
+            let items = rustc_public::all_local_items();
+            compile_crate(&mut code, &krate, items).unwrap();
+            std::ops::ControlFlow::Break(code)
+        })
+        .unwrap();
+        assert_eq!(
+            code,
+            "crate main { fn run () -> () { trusted } }".to_string()
+        );
     }
 }
