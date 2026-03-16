@@ -1,5 +1,5 @@
 use formality_core::{cast_impl, term};
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 mod debug_impls;
 mod parse_impls;
@@ -167,6 +167,21 @@ pub enum RigidName {
     FnDef(FnId),
 }
 
+impl Display for RigidName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let out = match self {
+            RigidName::AdtId(_) => todo!(),
+            RigidName::ScalarId(scalar_id) => scalar_id.to_string(),
+            RigidName::Ref(_) => todo!(),
+            RigidName::Tuple(0) => "()".to_string(),
+            RigidName::Tuple(_) => todo!(),
+            RigidName::FnPtr(_) => todo!(),
+            RigidName::FnDef(_) => todo!(),
+        };
+        write!(f, "{out}")
+    }
+}
+
 #[term]
 #[derive(Copy, Default)]
 pub enum RefKind {
@@ -186,6 +201,8 @@ pub enum ScalarId {
     U32,
     #[grammar(u64)]
     U64,
+    #[grammar(u128)]
+    U128,
     #[grammar(i8)]
     I8,
     #[grammar(i16)]
@@ -194,6 +211,8 @@ pub enum ScalarId {
     I32,
     #[grammar(i64)]
     I64,
+    #[grammar(i128)]
+    I128,
     #[grammar(bool)]
     Bool,
     #[grammar(usize)]
@@ -209,14 +228,38 @@ impl ScalarId {
             | ScalarId::U16
             | ScalarId::U32
             | ScalarId::U64
+            | ScalarId::U128
             | ScalarId::I8
             | ScalarId::I16
             | ScalarId::I32
             | ScalarId::I64
+            | ScalarId::I128
             | ScalarId::Usize
             | ScalarId::Isize => true,
             ScalarId::Bool => false,
         }
+    }
+}
+
+impl Display for ScalarId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use ScalarId::*;
+        let out = match self {
+            U8 => "u8",
+            U16 => "u16",
+            U32 => "u32",
+            U64 => "u64",
+            U128 => "u128",
+            I8 => "i8",
+            I16 => "i16",
+            I32 => "i32",
+            I64 => "i64",
+            I128 => "i128",
+            Bool => "bool",
+            Usize => "usize",
+            Isize => "isize",
+        };
+        write!(f, "{out}")
     }
 }
 
