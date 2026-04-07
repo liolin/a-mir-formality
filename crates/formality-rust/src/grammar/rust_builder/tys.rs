@@ -37,7 +37,7 @@ impl RustBuilder {
         }
     }
 
-    fn pretty_print_scalar(&self, scalar_id: &ScalarId) -> String {
+    pub fn pretty_print_scalar(&self, scalar_id: &ScalarId) -> String {
         match scalar_id {
             ScalarId::U8 => "u8",
             ScalarId::U16 => "u16",
@@ -87,7 +87,7 @@ impl RustBuilder {
         Ok(format!("&{lt} {kind}{ty}"))
     }
 
-    fn pretty_print_lt(&mut self, lt: &Lt) -> Fallible<String> {
+    pub fn pretty_print_lt(&mut self, lt: &Lt) -> Fallible<String> {
         match lt.data() {
             LtData::Static => Ok("'static".into()),
             LtData::Variable(core_variable) => self.variable_name(core_variable),
@@ -133,6 +133,10 @@ impl RustBuilder {
             .ok_or_else(|| anyhow::anyhow!("Return type is missing"))??;
 
         Ok(format!("fn({input_args}) -> {output_arg}"))
+    }
+
+    pub fn pretty_print_parameter(&mut self, parameter: &Parameter) -> Fallible<String> {
+        todo!()
     }
 }
 

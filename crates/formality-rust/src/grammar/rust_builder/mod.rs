@@ -13,6 +13,8 @@ mod traits_and_impls;
 
 mod tys;
 
+mod expr;
+
 pub fn build_rust(crates: &Crates) -> Fallible<Vec<String>> {
     RustBuilder::default().build_crates(crates)
 }

@@ -29,7 +29,7 @@ impl RustBuilder {
     pub fn build_fn_body(&mut self, fn_body: &FnBody) -> String {
         match fn_body {
             FnBody::TrustedFnBody => format!("{{ panic!(\"Trusted Fn Body\") }}"),
-            FnBody::Expr(_) => todo!("expr fn body"),
+            FnBody::Expr(block) => self.build_block(block),
         }
     }
 }
@@ -38,12 +38,11 @@ impl RustBuilder {
 mod test {
 
     #[test]
-    #[ignore = "ignore until clear how trusted should be parsed"]
     fn simple_fn() {
         crate::assert_rust!(
             [
                 crate Foo {
-                    fn run () -> i32 trusted;
+                    fn run () -> i32 {trusted}
                 }
             ],
             fn run() -> i32 { panic!("Trusted Fn Body") }

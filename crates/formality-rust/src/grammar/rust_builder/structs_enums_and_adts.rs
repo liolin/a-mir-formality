@@ -67,7 +67,7 @@ impl RustBuilder {
         Ok(format!("{opening}{fields}{closing}"))
     }
 
-    fn build_field_name(&mut self, field_name: &FieldName) -> String {
+    pub(crate) fn build_field_name(&mut self, field_name: &FieldName) -> String {
         match field_name {
             FieldName::Id(id) => id.deref().clone(),
             FieldName::Index(idx) => format!("{idx}"),
