@@ -14,21 +14,22 @@ impl RustBuilder {
             .collect::<Result<Vec<_>, _>>()?
             .join(", ");
         let output_arg = self.pretty_print_type(&data.output_ty)?;
-        // TODO: Where clauses
-        // self.print_where(&data.where_clauses)?;
+        let (params, bounds) = self.build_where(&data.where_clauses)?;
 
         let body = match &data.body {
             MaybeFnBody::NoFnBody => ";".into(),
             MaybeFnBody::FnBody(fn_body) => format!(" {}", self.build_fn_body(fn_body)),
         };
 
-        Ok(format!("fn {id}({input_args}) -> {output_arg}{body}"))
+        Ok(format!(
+            "fn {id}{params}({input_args}) -> {output_arg}{bounds}{body}"
+        ))
     }
 
     pub fn build_fn_body(&mut self, fn_body: &FnBody) -> String {
         match fn_body {
             FnBody::TrustedFnBody => format!("{{ panic!(\"Trusted Fn Body\") }}"),
-            FnBody::Expr(_) => unimplemented!("expr fn body"),
+            FnBody::Expr(_) => todo!("expr fn body"),
         }
     }
 }

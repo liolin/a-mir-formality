@@ -19,7 +19,7 @@ impl RustBuilder {
             };
 
             let id = t.id.deref();
-            let wc = pp.build_where(&term.where_clauses)?;
+            let (params, bounds) = pp.build_where(&term.where_clauses)?;
 
             let items = term
                 .trait_items
@@ -31,7 +31,7 @@ impl RustBuilder {
                 .collect::<Result<Vec<_>, _>>()?
                 .join("\n");
 
-            Ok(format!("{safety}trait {id}{wc} {{ {items} }}"))
+            Ok(format!("{safety}trait {id}{params} {bounds} {{ {items} }}"))
         })
     }
 
@@ -46,7 +46,10 @@ impl RustBuilder {
                     WhereClauseData::IsImplemented(ty, _trait_id, _parameters) => {
                         pp.pretty_print_type(ty)
                     }
-                    _ => unimplemented!(),
+                    WhereClauseData::AliasEq(alias_ty, ty) => todo!(),
+                    WhereClauseData::Outlives(parameter, lt) => todo!(),
+                    WhereClauseData::ForAll(core_binder) => todo!(),
+                    WhereClauseData::TypeOfConst(_, ty) => todo!(),
                 })
                 .collect::<Result<Vec<_>, _>>()?
                 .join(", ");
@@ -133,9 +136,9 @@ impl RustBuilder {
     }
 
     /// Prints a where clauses according to the [this](https://doc.rust-lang.org/reference/items/generics.html#where-clauses)
-    pub fn build_where(&mut self, where_clauses: &Vec<WhereClause>) -> Fallible<String> {
+    pub fn build_where(&mut self, where_clauses: &Vec<WhereClause>) -> Fallible<(String, String)> {
         if where_clauses.is_empty() {
-            return Ok("".into());
+            return Ok((String::new(), String::new()));
         }
 
         let params = where_clauses
@@ -181,11 +184,13 @@ impl RustBuilder {
             .collect::<Result<Vec<_>, _>>()?
             .join("\n");
 
-        Ok(if bounds.is_empty() {
-            format!("<{params}>")
+        let params = format!("<{params}>");
+        let bounds = if bounds.is_empty() {
+            bounds
         } else {
-            format!("<{params}> where {bounds}")
-        })
+            format!("where {bounds}")
+        };
+        Ok((params, bounds))
     }
 }
 

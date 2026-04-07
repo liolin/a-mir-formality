@@ -7,24 +7,24 @@ impl RustBuilder {
     pub fn build_struct(&mut self, strukt: &Struct) -> Fallible<String> {
         let id = strukt.id.deref();
         let data = strukt.binder.peek();
-        let wc = self.build_where(&data.where_clauses)?;
+        let (params, bounds) = self.build_where(&data.where_clauses)?;
 
         let fields = data
             .fields
             .iter()
             .map(|f| {
                 self.pretty_print_type(&f.ty)
-                    .map(|ty| format!("{:?}: {}", f.name, ty))
-            }) // TODO: Implement pp for names
+                    .map(|ty| format!("{}: {}", self.build_field_name(&f.name), ty))
+            })
             .collect::<Result<Vec<_>, _>>()?
             .join(", ");
-        Ok(format!("struct {id}{wc} {{ {fields} }}"))
+        Ok(format!("struct {id}{params} {bounds} {{ {fields} }}"))
     }
 
     pub fn build_enum(&mut self, e: &Enum) -> Fallible<String> {
         let id = e.id.deref();
         let data = e.binder.peek();
-        let wc = self.build_where(&data.where_clauses)?;
+        let (params, bounds) = self.build_where(&data.where_clauses)?;
 
         let variants = data
             .variants
@@ -33,7 +33,7 @@ impl RustBuilder {
             .collect::<Result<Vec<_>, _>>()?
             .join(", ");
 
-        Ok(format!("enum {id}{wc} {{ {variants} }}"))
+        Ok(format!("enum {id}{params} {bounds} {{ {variants} }}"))
     }
 
     pub fn build_print_variant(&mut self, variant: &Variant) -> Fallible<String> {
@@ -65,6 +65,13 @@ impl RustBuilder {
             .collect::<Result<Vec<_>, _>>()?
             .join(", ");
         Ok(format!("{opening}{fields}{closing}"))
+    }
+
+    fn build_field_name(&mut self, field_name: &FieldName) -> String {
+        match field_name {
+            FieldName::Id(id) => id.deref().clone(),
+            FieldName::Index(idx) => format!("{idx}"),
+        }
     }
 }
 

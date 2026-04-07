@@ -128,7 +128,7 @@ impl RustBuilder {
             .next()
             .map(|p| match p {
                 Parameter::Ty(ty) => self.pretty_print_type(ty),
-                _ => unimplemented!(),
+                _ => todo!(),
             })
             .ok_or_else(|| anyhow::anyhow!("Return type is missing"))??;
 

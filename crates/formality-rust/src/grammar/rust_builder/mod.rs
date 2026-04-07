@@ -30,7 +30,7 @@ impl NameContext {
     /// Returns a pretty printable name for the `given CoreVaribale`.
     pub fn variable_name(&self, variable: &CoreVariable<crate::FormalityLang>) -> Fallible<String> {
         let CoreVariable::BoundVar(core_bound_var) = variable else {
-            unimplemented!()
+            todo!()
         };
 
         let var_index = core_bound_var.var_index.index;
@@ -131,7 +131,7 @@ impl RustBuilder {
             CrateItem::TraitImpl(trait_impl) => self.build_trait_impl(trait_impl),
             CrateItem::NegTraitImpl(neg_trait_impl) => self.build_neg_trait_impl(neg_trait_impl),
             CrateItem::Fn(f) => self.build_fn(f),
-            CrateItem::Test(_) => unimplemented!(),
+            CrateItem::Test(_) => todo!(),
         }
     }
 
