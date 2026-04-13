@@ -111,7 +111,7 @@ mod test {
         crate::assert_rust!(
             [
                 crate Foo {
-                    struct Bar
+                    struct Bar<T>
                         where
                         T: Baz
                     {
@@ -119,11 +119,11 @@ mod test {
                     }
                 }
             ],
-            struct Bar<T>
+            struct Bar<T1>
             where
-                T: Baz
+                T1: Baz
             {
-                a: T,
+                a: T1,
             }
         );
     }
@@ -151,7 +151,7 @@ mod test {
         crate::assert_rust!(
             [
                 crate Foo {
-                    enum Bar
+                    enum Bar<T>
                         where
                         T : Baz
                     {
@@ -160,12 +160,12 @@ mod test {
                     }
                 }
             ],
-            enum Bar<T>
+            enum Bar<T1>
             where
-                T: Baz
+                T1: Baz
             {
-                A { t: T },
-                B(T),
+                A { t: T1 },
+                B(T1),
             }
         );
     }

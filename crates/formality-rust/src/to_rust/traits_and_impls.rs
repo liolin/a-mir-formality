@@ -46,7 +46,9 @@ impl RustBuilder {
 
             let id = term.trait_id.deref();
             let ty = pp.ty_to_string(&term.self_ty)?;
-            write!(out, "impl {id}")?;
+            write!(out, "impl")?;
+            pp.write_generic_params(out, &term.where_clauses)?;
+            write!(out, " {id}")?;
             pp.write_impl_trait_params(out, &term.trait_parameters)?;
             writeln!(out, " for {ty} ")?;
             pp.write_where_bounds(out, &term.where_clauses)?;
@@ -218,15 +220,15 @@ impl RustBuilder {
             return Ok(());
         }
 
-        write!(out, "<")?;
+        let mut buffer = String::new();
         let mut sep = "";
         for param in where_clauses {
-            write!(out, "{sep}")?;
+            write!(buffer, "{sep}")?;
             match param.data() {
                 WhereClauseData::IsImplemented(ty, _, _) => {
                     if let TyData::Variable(var) = ty.data() {
                         let var = self.core_variable_to_string(var)?;
-                        write!(out, "{var}")?;
+                        write!(buffer, "{var}")?;
                     } else {
                         continue;
                     }
@@ -237,12 +239,15 @@ impl RustBuilder {
                 WhereClauseData::TypeOfConst(konst, ty) => {
                     let konst = self.const_to_string(konst)?;
                     let ty = self.ty_to_string(ty)?;
-                    write!(out, "const {konst}: {ty}")?;
+                    write!(buffer, "const {konst}: {ty}")?;
                 }
             }
             sep = ", ";
         }
-        write!(out, ">")?;
+
+        if !buffer.is_empty() {
+            write!(out, "<{buffer}>")?;
+        }
         Ok(())
     }
 }
@@ -251,7 +256,7 @@ impl RustBuilder {
 mod test {
 
     #[test]
-    fn simple_trait() {
+    fn trivial_trait() {
         crate::assert_rust!(
             [
                 crate Foo {
@@ -267,7 +272,7 @@ mod test {
     }
 
     #[test]
-    fn simple_trait_with_associated_ty() {
+    fn trait_with_associated_ty() {
         crate::assert_rust!(
             [
                 crate Foo {
@@ -285,7 +290,7 @@ mod test {
     }
 
     #[test]
-    fn simple_trait_with_associated_ty2() {
+    fn trait_with_associated_ty_and_generic() {
         crate::assert_rust!(
             [
                 crate Foo {
@@ -303,26 +308,26 @@ mod test {
     }
 
     #[test]
-    fn where_is_implemented() {
+    fn trait_with_where_bounds() {
         crate::assert_rust!(
             [
                 crate Foo {
-                    trait Bar where T: Baz {}
+                    trait Bar<T> where T: Baz {}
                 }
             ],
-            "trait Bar<T> where T: Baz { }"
+            "trait Bar<T2> where T2: Baz { }"
         );
     }
 
     #[test]
-    fn where_is_implemented_with_params() {
+    fn trait_with_where_bounds_and_params() {
         crate::assert_rust!(
             [
                 crate Foo {
-                    trait Bar where T: Baz<i32, String> {}
+                    trait Bar<T> where T: Baz<i32, String> {}
                 }
             ],
-            "trait Bar<T> where T: Baz<i32, String> { }"
+            "trait Bar<T2> where T2: Baz<i32, String> { }"
         );
     }
 
@@ -331,18 +336,18 @@ mod test {
         crate::assert_rust!(
             [
                 crate Foo {
-                    trait Bar where K: Baz {
+                    trait Bar<K> where K: Baz {
                         type Error: [];
                         fn test() -> K;
                     }
                 }
             ],
-            "trait Bar<K> where K: Baz { type Error; fn test() -> K; }"
+            "trait Bar<T2> where T2: Baz { type Error; fn test() -> T2; }"
         );
     }
 
     #[test]
-    fn where_type_of_const() {
+    fn trait_with_const_generic() {
         crate::assert_rust!(
             [
                 crate Foo {
@@ -354,17 +359,17 @@ mod test {
     }
 
     #[test]
-    fn simple_trait_impl() {
+    fn trait_impl() {
         crate::assert_rust!(
             [
                 crate Foo {
-                    impl Bar<T> for Baz where T: Bur {
+                    impl<T> Bar<T> for Baz where T: Bur {
                         fn run() -> T {trusted}
                     }
                 }
             ],
-            impl Bar<T> for Baz where T: Bur {
-                fn run() -> T {
+            impl<T1> Bar<T1> for Baz where T1: Bur {
+                fn run() -> T1 {
                     panic!("Trusted Fn Body")
                 }
             }
@@ -372,7 +377,7 @@ mod test {
     }
 
     #[test]
-    fn trait_impl_bounds() {
+    fn trait_impl_with_bounds() {
         crate::assert_rust!(
             [
                 crate Foo {
@@ -390,7 +395,7 @@ mod test {
     }
 
     #[test]
-    fn simple_neg_trait_impl() {
+    fn neg_trait_impl() {
         crate::assert_rust!(
             [
                 crate Foo {
