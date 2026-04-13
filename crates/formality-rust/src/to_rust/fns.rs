@@ -32,7 +32,9 @@ impl RustBuilder {
                 MaybeFnBody::NoFnBody => writeln!(out, ";")?,
                 MaybeFnBody::FnBody(fn_body) => {
                     writeln!(out, "")?;
+                    pp.emit_lt = false;
                     pp.write_fn_body(out, fn_body)?;
+                    pp.emit_lt = true;
                 }
             };
 
@@ -68,9 +70,9 @@ impl RustBuilder {
         for wc in where_clauses {
             match wc.data() {
                 WhereClauseData::IsImplemented(_, _, _) => continue,
-                WhereClauseData::AliasEq(_, _) => todo!(),
-                WhereClauseData::Outlives(_, _) => todo!(),
-                WhereClauseData::ForAll(_) => todo!(),
+                WhereClauseData::AliasEq(_, _) => todo!("Alias Eq not implemented"),
+                WhereClauseData::Outlives(_, _) => todo!("Outlives not implemented"),
+                WhereClauseData::ForAll(_) => todo!("For all not implemented"),
                 WhereClauseData::TypeOfConst(konst, ty) => {
                     let konst = self.const_to_string(konst)?;
                     let ty = self.ty_to_string(ty)?;

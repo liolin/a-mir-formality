@@ -8,6 +8,8 @@ impl RustBuilder {
         self.with_binder(&strukt.binder, |term, pp| {
             write!(out, "struct {}", strukt.id.deref())?;
 
+            dbg!(term);
+
             pp.write_generic_params(out, &term.where_clauses)?;
             pp.write_where_bounds(out, &term.where_clauses)?;
 

@@ -33,7 +33,7 @@ impl RustBuilder {
         }
     }
 
-    pub fn rigid_ty_to_string(&mut self, rigid_ty: &RigidTy) -> Fallible<String> {
+    fn rigid_ty_to_string(&mut self, rigid_ty: &RigidTy) -> Fallible<String> {
         match &rigid_ty.name {
             RigidName::AdtId(adt_id) => {
                 let id = adt_id.deref();
@@ -87,15 +87,6 @@ impl RustBuilder {
             RefKind::Mut => "mut ",
         };
 
-        let lt = parameters
-            .get(0)
-            .and_then(|p| match p {
-                Parameter::Lt(lt) => Some(lt),
-                _ => None,
-            })
-            .ok_or_else(|| {
-                anyhow::anyhow!("the first parameter of a reference must be a life time")
-            })?;
         let ty = parameters
             .get(1)
             .and_then(|p| match p {
@@ -105,11 +96,23 @@ impl RustBuilder {
             .ok_or_else(|| {
                 anyhow::anyhow!("The second parameter of a reference muste be a type")
             })?;
-
-        let lt = self.lt_to_string(lt)?;
         let ty = self.ty_to_string(ty)?;
 
-        Ok(format!("&{lt} {kind}{ty}"))
+        if self.emit_lt {
+            let lt = parameters
+                .get(0)
+                .and_then(|p| match p {
+                    Parameter::Lt(lt) => Some(lt),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!("the first parameter of a reference must be a life time")
+                })?;
+            let lt = self.lt_to_string(lt)?;
+            Ok(format!("&{lt} {kind}{ty}"))
+        } else {
+            Ok(format!("& {kind}{ty}"))
+        }
     }
 
     pub fn ptr_to_string(

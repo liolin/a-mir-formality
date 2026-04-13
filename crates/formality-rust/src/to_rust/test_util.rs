@@ -63,7 +63,11 @@ pub fn assert_rustc_success(input: &str) {
     let crates = term(input);
     let result = build_workspace(&crates, tmp_dir.path()).unwrap();
     let stderr = String::from_utf8_lossy(&result.stderr);
-    assert!(result.status.success(), "{stderr}");
+    assert!(
+        result.status.success(),
+        "Test Directory: {:?}\n\n{stderr}",
+        tmp_dir.path()
+    );
 }
 
 /// Asserts that compiling the given Formality code as Rust code with `rustc`

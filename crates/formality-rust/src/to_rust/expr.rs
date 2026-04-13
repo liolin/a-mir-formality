@@ -56,7 +56,7 @@ impl RustBuilder {
     ) -> Fallible<()> {
         // format!("let mut {id}: {ty}{init};")
         let id = id.deref();
-        let ty = self.ty_to_string(ty).unwrap();
+        let ty = self.ty_to_string(ty)?;
 
         // TODO: Is there a way to decided if the variable should be mutable or not?
         write!(out, "let mut {id}: {ty}")?;
@@ -120,7 +120,14 @@ impl RustBuilder {
     }
 
     fn write_exists(&mut self, out: &mut CodeWriter, binder: &Binder<Block>) -> Fallible<()> {
-        self.with_binder(binder, |term, pp| pp.write_block(out, term))
+        // self.with_binder(binder, |term, pp| pp.write_block(out, term))
+        let block = binder.peek();
+        for stmt in &block.stmts {
+            self.write_stmt(out, stmt)?;
+            write!(out, "\n")?;
+        }
+
+        Ok(())
     }
 
     fn write_expr(&mut self, out: &mut CodeWriter, expr: &Expr) -> Fallible<()> {

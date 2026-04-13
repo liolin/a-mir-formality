@@ -233,9 +233,9 @@ impl RustBuilder {
                         continue;
                     }
                 }
-                WhereClauseData::AliasEq(_, _) => todo!(),
-                WhereClauseData::Outlives(_, _) => todo!(),
-                WhereClauseData::ForAll(_) => todo!(),
+                WhereClauseData::AliasEq(_, _) => todo!("Alias Eq not implemented"),
+                WhereClauseData::Outlives(_, _) => todo!("Outlives not implemented"),
+                WhereClauseData::ForAll(_) => todo!("For All not implemented"),
                 WhereClauseData::TypeOfConst(konst, ty) => {
                     let konst = self.const_to_string(konst)?;
                     let ty = self.ty_to_string(ty)?;

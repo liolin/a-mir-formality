@@ -84,7 +84,7 @@ pub struct NameContext {
 }
 
 impl NameContext {
-    /// Returns a pretty printable name for the `given CoreVaribale`.
+    /// Returns a pretty printable name for the given `CoreVaribale`.
     pub fn core_variable_to_string(
         &self,
         variable: &CoreVariable<crate::FormalityLang>,
@@ -157,9 +157,10 @@ impl<W: Write> Write for CodeWriter<W> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct RustBuilder {
     ctx: NameContext,
+    emit_lt: bool,
 }
 
 impl RustBuilder {
@@ -224,6 +225,15 @@ impl RustBuilder {
     fn write_feature_gate(&mut self, out: &mut CodeWriter, gate: &FeatureGate) -> Fallible<()> {
         writeln!(out, "{:?}", gate)?;
         Ok(())
+    }
+}
+
+impl Default for RustBuilder {
+    fn default() -> RustBuilder {
+        RustBuilder {
+            ctx: NameContext::default(),
+            emit_lt: true,
+        }
     }
 }
 
