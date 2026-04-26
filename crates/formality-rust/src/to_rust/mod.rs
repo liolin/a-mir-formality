@@ -85,9 +85,23 @@ type Stack<T> = Vec<T>;
 
 #[derive(Debug, Default)]
 pub struct NameContext {
-    variable_names: Stack<Vec<String>>,
+    bound_names: Stack<Vec<String>>,
+    existential_names: Stack<String>,
+    universal_names: Stack<String>,
     used: HashSet<String>,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+enum VariableKind {
+    Universal,
+    Existential,
+    Bound,
+}
+
+/// The Prefix for existential lifetimes introduced by an exists
+/// binder.  An invalid name (missing tick at the beginning) is used
+/// to distinguish user specified lifetimes from existential ones
+pub const EXISTENTIAL_LIFETIME: &str = "EXISTENTIAL_LIFETIME";
 
 impl NameContext {
     pub fn core_variable_to_string(
@@ -102,63 +116,77 @@ impl NameContext {
                     .ok_or_else(|| anyhow::anyhow!("binder was opened"))?
                     .index;
 
-                self.variable_names
+                self.bound_names
                     .get(binder_index)
                     .and_then(|vars| vars.get(var_index))
                     .cloned()
                     .ok_or_else(|| anyhow::anyhow!("unbound variable {core_bound_var:?}"))
             }
-            CoreVariable::UniversalVar(v) => {
-                Ok(self.free_variable_name(true, v.kind, v.var_index.index))
-            }
-            CoreVariable::ExistentialVar(v) => {
-                Ok(self.free_variable_name(false, v.kind, v.var_index.index))
-            }
+            CoreVariable::UniversalVar(uniseral_var) => self
+                .universal_names
+                .get(uniseral_var.var_index.index)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("unbound variable {uniseral_var:?}")),
+            CoreVariable::ExistentialVar(existential_var) => self
+                .existential_names
+                .get(existential_var.var_index.index)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("unbound variable {existential_var:?}")),
         }
     }
 
     pub fn current_names(&self) -> Fallible<&[String]> {
-        self.variable_names
+        self.bound_names
             .first()
             .map(|v| v.as_slice())
             .ok_or_else(|| anyhow::anyhow!("no active binder frame"))
     }
 
     pub fn pop(&mut self) {
-        if let Some(names) = self.variable_names.first().cloned() {
-            self.variable_names.remove(0);
+        if let Some(names) = self.bound_names.first().cloned() {
+            self.bound_names.remove(0);
             for name in names {
                 self.used.remove(&name);
             }
         }
     }
 
-    pub fn push(&mut self, kinds: &[ParameterKind]) {
-        self.variable_names.insert(0, Vec::new());
+    pub fn push_bound(&mut self, kinds: &[ParameterKind]) {
+        self.bound_names.insert(0, Vec::new());
         for kind in kinds {
-            let name = self.fresh_name(kind);
-            self.variable_names[0].push(name);
-        }
-    }
-
-    pub fn push_anonymous(&mut self, kinds: &[ParameterKind]) {
-        self.variable_names.insert(0, Vec::new());
-        for kind in kinds {
-            let name = if matches!(kind, ParameterKind::Lt) {
-                "'_".to_owned()
-            } else {
-                self.fresh_name(kind)
-            };
+            let name = self.fresh_name(VariableKind::Bound, kind);
             self.used.insert(name.clone());
-            self.variable_names[0].push(name);
+            self.bound_names[0].push(name);
         }
     }
 
-    fn fresh_name(&mut self, kind: &ParameterKind) -> String {
-        let prefix = match kind {
-            ParameterKind::Ty => "T",
-            ParameterKind::Lt => "'a",
-            ParameterKind::Const => "N",
+    pub fn push_existential(&mut self, kinds: &[ParameterKind]) {
+        for kind in kinds {
+            let name = self.fresh_name(VariableKind::Existential, kind);
+            self.used.insert(name.clone());
+            self.existential_names.push(name);
+        }
+    }
+
+    pub fn push_universal(&mut self, kinds: &[ParameterKind]) {
+        for kind in kinds {
+            let name = self.fresh_name(VariableKind::Universal, kind);
+            self.used.insert(name.clone());
+            self.universal_names.push(name);
+        }
+    }
+
+    fn fresh_name(&mut self, var_kind: VariableKind, kind: &ParameterKind) -> String {
+        let prefix = match (var_kind, kind) {
+            (VariableKind::Bound, ParameterKind::Ty) => "T",
+            (VariableKind::Bound, ParameterKind::Lt) => "'a",
+            (VariableKind::Bound, ParameterKind::Const) => "N",
+            (VariableKind::Existential, ParameterKind::Ty) => "E",
+            (VariableKind::Existential, ParameterKind::Lt) => EXISTENTIAL_LIFETIME,
+            (VariableKind::Existential, ParameterKind::Const) => "CE",
+            (VariableKind::Universal, ParameterKind::Ty) => "U",
+            (VariableKind::Universal, ParameterKind::Lt) => "'u",
+            (VariableKind::Universal, ParameterKind::Const) => "CU",
         };
 
         for i in 1.. {
@@ -169,19 +197,6 @@ impl NameContext {
         }
 
         unreachable!("fresh name generation should always terminate")
-    }
-
-    fn free_variable_name(&self, universal: bool, kind: ParameterKind, var_index: usize) -> String {
-        let suffix = var_index + 1;
-        let prefix = match (universal, kind) {
-            (true, ParameterKind::Ty) => "U",
-            (true, ParameterKind::Lt) => "'u",
-            (true, ParameterKind::Const) => "CU",
-            (false, ParameterKind::Ty) => "E",
-            (false, ParameterKind::Lt) => "'e",
-            (false, ParameterKind::Const) => "CE",
-        };
-        format!("{prefix}{suffix}")
     }
 }
 
@@ -197,7 +212,7 @@ impl RustBuilder {
         mut op: impl FnMut(&T, &mut RustBuilder) -> Fallible<R>,
     ) -> Fallible<R> {
         let term = binder.peek();
-        self.ctx.push(binder.kinds());
+        self.ctx.push_bound(binder.kinds());
 
         let result = op(term, self);
 

@@ -61,7 +61,7 @@ impl RustBuilder {
         init: Option<&Init>,
     ) -> Fallible<syntax::Stmt> {
         Ok(syntax::Stmt::Let {
-            // TODO: is there a way to knwo, if the variable must be mutable or not?
+            // TODO: is there a way to know, if the variable must be mutable or not?
             mutable: true,
             name: id.deref().clone(),
             ty: self.lower_ty(ty)?,
@@ -69,24 +69,9 @@ impl RustBuilder {
         })
     }
 
-    /// Lowers an `exists` statement. The newly introduced lifetimes
-    /// e.g. `'r0`, are all treated as anonymous lifetimes `'_`.
-    /// ```rust,ignore
-    /// exists<'r0> {
-    ///   let v2: &'r0 u32 = v1;
-    ///   return v2;
-    /// }
-    /// ```
-    /// becomes:
-    /// ```rust,ignore
-    /// {
-    ///   let v2: &'_ u32 = v1;
-    ///   return v2;
-    /// }
-    /// ```
     fn lower_exists_stmt(&mut self, binder: &Binder<Block>) -> Fallible<syntax::Stmt> {
         let term = binder.peek();
-        self.ctx.push_anonymous(binder.kinds());
+        self.ctx.push_existential(binder.kinds());
 
         let result = syntax::Stmt::Block(self.lower_block(term)?);
 
@@ -226,5 +211,62 @@ fn foo() -> u32 {
 }
 "#
         );
+    }
+
+    #[test]
+    fn omited_existential_lifetimes() {
+        crate::assert_rust!(
+            [
+                crate Foo {
+                    fn foo() -> u32 {
+                        exists<'r0, 'r1> {
+                            let v1: u32 = 0 _ u32;
+                            let v2: &mut 'r0 u32 = &mut 'r1 v1;
+                            return *v2;
+                        }
+                    }
+                }
+            ],
+            r#"
+fn foo() -> u32 {
+    {
+        let mut v1: u32 = 0_u32;
+        let mut v2: &mut u32 = &mut v1;
+        return *v2;
+    }
+}
+"#
+        );
+    }
+
+    #[test]
+    // TODO: Move this tests to a better location
+    fn exists_yields_existential_lifetimes() {
+        use crate::grammar::expr::Stmt;
+        use crate::grammar::Ty;
+        use crate::grammar::Variable;
+        let stmt: Stmt = crate::rust::term(
+            "exists<'r0, 'r1> {
+                            let v0: u32 = 1 _ u32;
+                            let v1: &mut 'r0 u32 = &mut 'r1 v0;
+                        }",
+        );
+
+        let Stmt::Exists { binder } = stmt else {
+            panic!();
+        };
+        let stmt = &binder.peek().stmts[1];
+
+        let Stmt::Let {
+            label: _,
+            id: _,
+            ty,
+            init: _,
+        } = stmt
+        else {
+            panic!();
+        };
+
+        assert!(matches!(ty, Ty::Variable(Variable::ExistentialVar(_))));
     }
 }
