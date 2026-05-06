@@ -5,7 +5,7 @@ use crate::grammar::{
     Binder, Fallible, FieldName, RefKind, Ty, ValueId,
 };
 
-use crate::to_rust::{syntax, tys, Context};
+use crate::to_rust::{context::Context, syntax, tys};
 
 pub fn lower_block(ctx: &mut Context, block: &Block) -> Fallible<syntax::Block> {
     let label = block.label.as_ref().map(|l| l.id.as_str().to_owned());
@@ -83,7 +83,7 @@ pub fn lower_exists_stmt(ctx: &mut Context, binder: &Binder<Block>) -> Fallible<
 pub fn lower_expr(ctx: &mut Context, expr: &Expr) -> Fallible<syntax::Expr> {
     match expr.data() {
         ExprData::Assign { place, expr } => Ok(syntax::Expr::Assign {
-            place: lower_place_expr(ctx, place)?,
+            place: lower_place_expr(place)?,
             value: Box::new(lower_expr(ctx, expr)?),
         }),
         ExprData::Call { callee, args } => Ok(syntax::Expr::Call {
@@ -101,9 +101,9 @@ pub fn lower_expr(ctx: &mut Context, expr: &Expr) -> Fallible<syntax::Expr> {
         ExprData::False => Ok(syntax::Expr::Bool(false)),
         ExprData::Ref { kind, lt: _, place } => Ok(syntax::Expr::Ref {
             mutable: matches!(kind, RefKind::Mut),
-            place: lower_place_expr(ctx, place)?,
+            place: lower_place_expr(place)?,
         }),
-        ExprData::Place(place_expr) => Ok(syntax::Expr::Place(lower_place_expr(ctx, place_expr)?)),
+        ExprData::Place(place_expr) => Ok(syntax::Expr::Place(lower_place_expr(place_expr)?)),
         ExprData::Turbofish { id, args } => Ok(syntax::Expr::Path {
             name: id.deref().clone(),
             args: args
@@ -152,17 +152,17 @@ pub fn lower_expr(ctx: &mut Context, expr: &Expr) -> Fallible<syntax::Expr> {
     }
 }
 
-pub fn lower_place_expr(ctx: &mut Context, place_expr: &PlaceExpr) -> Fallible<syntax::PlaceExpr> {
+pub fn lower_place_expr(place_expr: &PlaceExpr) -> Fallible<syntax::PlaceExpr> {
     match place_expr.data() {
         PlaceExprData::Var(value_id) => Ok(syntax::PlaceExpr::Var(value_id.deref().clone())),
         PlaceExprData::Deref { prefix } => Ok(syntax::PlaceExpr::Deref(Box::new(
-            lower_place_expr(ctx, prefix)?,
+            lower_place_expr(prefix)?,
         ))),
         PlaceExprData::Parens(place_expr) => Ok(syntax::PlaceExpr::Paren(Box::new(
-            lower_place_expr(ctx, place_expr)?,
+            lower_place_expr(place_expr)?,
         ))),
         PlaceExprData::Field { prefix, field_name } => Ok(syntax::PlaceExpr::Field {
-            prefix: Box::new(lower_place_expr(ctx, prefix)?),
+            prefix: Box::new(lower_place_expr(prefix)?),
             field: match field_name {
                 FieldName::Id(id) => id.deref().clone(),
                 FieldName::Index(idx) => idx.to_string(),
