@@ -198,11 +198,12 @@ mod test {
                     }
                 }
             ],
-            r#"
+            expect_test::expect![[r#"
 pub fn foo() -> u32 {
     let mut x: u32;
     return x;
 }"#
+                                  ]]
         );
     }
 
@@ -218,12 +219,13 @@ pub fn foo() -> u32 {
                     }
                 }
             ],
-            r#"
+            expect_test::expect![[r#"
 pub fn foo() -> () {
     'a: {
         break 'a;
     }
 }"#
+                                   ]]
         );
     }
 
@@ -241,15 +243,14 @@ pub fn foo() -> () {
                     }
                 }
             ],
-            r#"
-pub fn foo() -> u32 {
-    {
-        let mut v1: u32 = 0_u32;
-        let mut v2: &mut u32 = &mut v1;
-        return *v2;
-    }
-}
-"#
+            expect_test::expect![[r#"
+                pub fn foo() -> u32 {
+                    {
+                        let mut v1: u32 = 0_u32;
+                        let mut v2: &mut u32 = &mut v1;
+                        return *v2;
+                    }
+                }"#]]
         );
     }
 }
