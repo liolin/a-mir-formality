@@ -9,6 +9,7 @@ fn test_assign_statement_local_only() {
             return v1;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -30,6 +31,7 @@ fn test_assign_constant() {
             return 5 _ u8;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -71,6 +73,7 @@ fn test_switch_statment() {
             }
         };
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -82,6 +85,7 @@ fn test_goto_terminator() {
             return v1;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -97,6 +101,7 @@ fn test_cyclic_goto() {
             }
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -108,6 +113,7 @@ fn test_ret_true() {
             return true;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -123,6 +129,7 @@ fn if_else() {
             }
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -137,7 +144,9 @@ fn if_else_different_return_types() {
                         return false;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: bool, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: u32, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }"#]])
@@ -156,6 +165,7 @@ fn test_call_terminator() {
             return v0;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -175,6 +185,7 @@ fn test_place_mention_statement() {
             return v1;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -198,6 +209,7 @@ fn test_storage_live_dead() {
             }
         };
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -216,6 +228,7 @@ fn test_struct() {
             return v1;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -231,6 +244,7 @@ fn test_let_with_well_formed_type() {
             let s1: S1<u8>;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -246,7 +260,9 @@ fn test_let_with_ill_formed_type() {
                 fn foo() -> () {
                     let s2: S2<S1>;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Trait1(S1), via: Place(?ty_1), assumptions: {}, env: Env { variables: [?ty_1, ?ty_2, ?ty_3], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Trait1(S1), via: Place(?ty_1), assumptions: {}, env: Env { variables: [?ty_1, ?ty_2], bias: Soundness, pending: [], allow_pending_outlives: true } }
@@ -265,6 +281,7 @@ fn test_call_invalid_fn() {
             return v1;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "fn-name" at (nll.rs) failed because
               no fn named `foo`
@@ -285,7 +302,9 @@ fn test_pass_non_subtype_arg() {
                     let v0: () = foo(v1);
                     return v0;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: (), assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: u32, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }"#]])
@@ -304,6 +323,7 @@ fn test_call_generic_fn_without_turbofish() {
             return v0;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "fn-name" at (nll.rs) failed because
               condition evaluated to false: `fn_decl.binder.len() == 0`
@@ -325,6 +345,7 @@ fn test_call_generic_fn_with_turbofish() {
             return v0;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -340,7 +361,9 @@ fn test_call_generic_fn_wrong_type_with_turbofish() {
                     let v0: u32 = identity::<bool>(v1);
                     return v0;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: u32, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: bool, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }"#]])
@@ -359,6 +382,7 @@ fn test_call_generic_fn_wrong_parameters_number_with_turbofish() {
             return v0;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "call" at (nll.rs) failed because
               condition evaluated to false: `input_tys.len() == args.len()`"#]])
@@ -377,6 +401,7 @@ fn test_call_generic_fn_wrong_arity() {
             return v0;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "turbofish" at (nll.rs) failed because
               condition evaluated to false: `fn_decl.binder.len() == args.len()`"#]])
@@ -397,7 +422,9 @@ fn test_incompatible_return_type() {
                 fn foo (v1: ()) -> u32 {
                     return v1;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: (), assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: u32, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }"#]])
@@ -419,6 +446,7 @@ fn test_uninitialised_return_type() {
             }
         };
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -456,6 +484,7 @@ fn test_invalid_value_in_switch_terminator() {
             }
         };
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             MaybeFnBody expected
 
@@ -508,6 +537,7 @@ fn test_ret_place_storage_dead() {
             }
         };
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             MaybeFnBody expected
 
@@ -538,6 +568,7 @@ fn test_fn_arg_storage_dead() {
             }
         };
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             MaybeFnBody expected
 
@@ -566,6 +597,7 @@ fn test_invalid_struct_field() {
             return v1;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "struct field" at (nll.rs) failed because
               condition evaluated to false: `field.name == *field_name`"#]])
@@ -584,7 +616,9 @@ fn test_field_projection_root_non_adt() {
                     v1.value = 2 _ u32;
                     return v1;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "struct field" at (nll.rs) failed because
               pattern `(RigidTy { name: RigidName::AdtId(adt_id), parameters }, state)` did not match value `(u32, flow_state([scope(none, None, {}, None, [(v1, u32)], [v1 : u32]), scope(none, None, {}, None, [(v2, Dummy)], [v2 : Dummy])], point_flow_state({}, {}), {}, {}))`"#]])
 }
@@ -601,7 +635,9 @@ fn test_struct_wrong_type_in_initialisation() {
                     let v2: Dummy = Dummy { value: false };
                     return v1;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: bool, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: u32, assumptions: {}, env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: true } }"#]])
@@ -619,6 +655,7 @@ fn test_non_adt_ty_for_struct() {
             return v1;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "struct" at (nll.rs) failed because
               no ADT named `Nonexistent`"#]])
@@ -640,6 +677,7 @@ fn test_false_literal() {
             return v1;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -662,6 +700,7 @@ fn test_ref_identity() {
             }
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -678,6 +717,7 @@ fn test_ref_deref() {
             }
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -696,6 +736,7 @@ fn test_ref_deref_generic_copy_bound() {
             }
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -721,6 +762,7 @@ fn test_break_valid_loop_label() {
             return 0 _ u32;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -742,7 +784,9 @@ fn test_break_nonexistent_label() {
                     }
                     return 0 _ u32;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/check/borrow_check/nll.rs:175:1: no applicable rules for borrow_check_statement { state: flow_state([scope(none, None, {}, None, [], []), scope(none, None, {}, None, [], []), scope(none, None, {}, Some({}), [], []), scope(none, None, {}, None, [], [])], point_flow_state({}, {}), {}, {}), statement: break 'nonexistent ;, places_live_on_exit: {}, assumptions: {}, env: TypeckEnv { env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: false }, output_ty: Some(u32), program: program([crate core { trait Copy <ty> { } impl Copy for u8 { } impl Copy for u16 { } impl Copy for u32 { } impl Copy for u64 { } impl Copy for i8 { } impl Copy for i16 { } impl Copy for i32 { } impl Copy for i64 { } impl Copy for bool { } impl Copy for usize { } impl Copy for isize { } impl <lt, ty> Copy for &^lt0_0 ^ty0_1 { } trait Place <ty> { type Target : [] ; } unsafe trait Subplace <ty> { type Source : [] ; type Target : [] ; fn offset (self : ^ty1_0) -> usize ; } unsafe trait PlaceRead <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { unsafe fn read (this : *const ^ty1_0, proj : ^ty1_1) -> <^ty1_1 as Subplace>::Target ; } unsafe trait PlaceWrite <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { unsafe fn write (this : *const ^ty1_0, sub : ^ty1_1, value : <^ty1_1 as Subplace>::Target) -> () ; } unsafe trait PlaceMove <ty, ty> where ^ty0_0 : PlaceRead <^ty0_1>, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { } unsafe trait PlaceDrop <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { unsafe fn drop (this : *const ^ty1_0, sub : ^ty1_1) -> () ; } unsafe trait DropHusk <ty> where ^ty0_0 : Place { unsafe fn drop_husk (this : *const ^ty1_0) -> () ; } unsafe trait PlaceBorrow <ty, ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { type BorrowDuration : [BorrowDuration] ; unsafe fn borrow (this : *const ^ty1_0, sub : ^ty1_1) -> ^ty1_2 ; } trait BorrowDuration <ty> { } struct Instant { } struct Lifetime <lt> { } struct Indefinite { } impl BorrowDuration for Instant { } impl <lt> BorrowDuration for Lifetime<^lt0_0> { } impl BorrowDuration for Indefinite { } unsafe trait PlaceDeref <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target, <^ty0_1 as Subplace>::Target : Place { unsafe fn deref (ptr : *mut ^ty1_0, sub : ^ty1_1) -> *const <^ty1_1 as Subplace>::Target ; } unsafe trait PlaceWrapper <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { type Wrapped : [Subplace] where <<^ty1_0 as PlaceWrapper<^ty1_1>>::Wrapped as Subplace>::Source => ^ty1_0 ; fn wrap (sub : ^ty1_1) -> <^ty1_0 as PlaceWrapper<^ty1_1>>::Wrapped ; } }, crate Foo { fn foo () -> u32 { loop { break 'nonexistent ; } return 0 _ u32 ; } }], 222) } }
 
             crates/formality-rust/src/check/borrow_check/nll.rs:175:1: no applicable rules for borrow_check_statement { state: flow_state([scope(none, None, {}, None, [], []), scope(none, None, {}, None, [], []), scope(none, None, {}, Some({}), [], []), scope(none, None, {}, None, [], [])], point_flow_state({}, {}), {}, {}), statement: break 'nonexistent ;, places_live_on_exit: {}, assumptions: {}, env: TypeckEnv { env: Env { variables: [], bias: Soundness, pending: [], allow_pending_outlives: false }, output_ty: Some(u32), program: program([crate core { trait Copy <ty> { } impl Copy for u8 { } impl Copy for u16 { } impl Copy for u32 { } impl Copy for u64 { } impl Copy for i8 { } impl Copy for i16 { } impl Copy for i32 { } impl Copy for i64 { } impl Copy for bool { } impl Copy for usize { } impl Copy for isize { } impl <lt, ty> Copy for &^lt0_0 ^ty0_1 { } trait Place <ty> { type Target : [] ; } unsafe trait Subplace <ty> { type Source : [] ; type Target : [] ; fn offset (self : ^ty1_0) -> usize ; } unsafe trait PlaceRead <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { unsafe fn read (this : *const ^ty1_0, proj : ^ty1_1) -> <^ty1_1 as Subplace>::Target ; } unsafe trait PlaceWrite <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { unsafe fn write (this : *const ^ty1_0, sub : ^ty1_1, value : <^ty1_1 as Subplace>::Target) -> () ; } unsafe trait PlaceMove <ty, ty> where ^ty0_0 : PlaceRead <^ty0_1>, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { } unsafe trait PlaceDrop <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { unsafe fn drop (this : *const ^ty1_0, sub : ^ty1_1) -> () ; } unsafe trait DropHusk <ty> where ^ty0_0 : Place { unsafe fn drop_husk (this : *const ^ty1_0) -> () ; } unsafe trait PlaceBorrow <ty, ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { type BorrowDuration : [BorrowDuration] ; unsafe fn borrow (this : *const ^ty1_0, sub : ^ty1_1) -> ^ty1_2 ; } trait BorrowDuration <ty> { } struct Instant { } struct Lifetime <lt> { } struct Indefinite { } impl BorrowDuration for Instant { } impl <lt> BorrowDuration for Lifetime<^lt0_0> { } impl BorrowDuration for Indefinite { } unsafe trait PlaceDeref <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target, <^ty0_1 as Subplace>::Target : Place { unsafe fn deref (ptr : *mut ^ty1_0, sub : ^ty1_1) -> *const <^ty1_1 as Subplace>::Target ; } unsafe trait PlaceWrapper <ty, ty> where ^ty0_0 : Place, ^ty0_1 : Subplace, <^ty0_1 as Subplace>::Source => <^ty0_0 as Place>::Target { type Wrapped : [Subplace] where <<^ty1_0 as PlaceWrapper<^ty1_1>>::Wrapped as Subplace>::Source => ^ty1_0 ; fn wrap (sub : ^ty1_1) -> <^ty1_0 as PlaceWrapper<^ty1_1>>::Wrapped ; } }, crate Foo { fn foo () -> u32 { loop { break 'nonexistent ; } return 0 _ u32 ; } }], 222) } }"#]])
@@ -767,6 +811,7 @@ fn test_continue_valid_loop_label() {
             return 0 _ u32;
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -790,6 +835,7 @@ fn test_continue_block_label() {
             return 0 _ u32;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "continue" at (nll.rs) failed because
               pattern `Some(places_live_on_continue)` did not match value `None`"#]])
@@ -821,6 +867,7 @@ fn test_parens_place_expr() {
             }
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -845,5 +892,6 @@ fn test_break_block_label() {
             return 0 _ u32;
         }
     }])
+    .rustc_ok()
     .ok()
 }

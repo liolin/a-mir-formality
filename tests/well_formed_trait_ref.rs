@@ -15,6 +15,7 @@ fn dependent_where_clause() {
             dummy: T,
         }
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -32,7 +33,9 @@ fn missing_dependent_where_clause() {
                 struct S2<T> where S1<T> : Trait2 {
                     dummy: T,
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: @ WellFormedTraitRef(Trait2(S1<!ty_0>)), via: Trait2(S1<!ty_0>), assumptions: {Trait2(S1<!ty_0>)}, env: Env { variables: [!ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Trait1(!ty_0), via: Trait2(S1<!ty_0>), assumptions: {Trait2(S1<!ty_0>)}, env: Env { variables: [!ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
@@ -55,6 +58,7 @@ fn lifetime_param() {
 
         struct S2<'a> where S1: Trait1<'a> {}
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -69,6 +73,7 @@ fn static_lifetime_param() {
 
         struct S2 where S1: Trait1<'static> {}
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -83,6 +88,7 @@ fn const_param() {
 
         struct S2 where S1: Trait1<u32(3)> {}
     }])
+    .rustc_ok()
     .ok()
 }
 

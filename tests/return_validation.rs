@@ -16,6 +16,7 @@ fn empty_body_non_unit_return() {
         fn foo() -> u32 {
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"function may not return a value"#]])
 }
 
@@ -60,6 +61,7 @@ fn if_else_one_branch_returns() {
             }
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"function may not return a value"#]])
 }
 
@@ -89,6 +91,7 @@ fn loop_with_break_no_return() {
             }
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"function may not return a value"#]])
 }
 

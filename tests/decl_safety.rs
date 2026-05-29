@@ -8,6 +8,7 @@ fn unsafe_trait() {
         unsafe trait Foo {}
         unsafe impl Foo for u32 {}
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -17,6 +18,7 @@ fn safe_trait() {
         safe trait Foo {}
         safe impl Foo for u32 {}
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -26,6 +28,7 @@ fn unsafe_trait_negative_impl() {
         unsafe trait Foo {}
         impl !Foo for u32 {}
     }])
+    .rustc_ok()
     .ok()
 }
 
@@ -35,6 +38,7 @@ fn unsafe_trait_negative_impl_mismatch() {
         unsafe trait Foo {}
         unsafe impl !Foo for u32 {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "neg trait impl" at (mod.rs) failed because
               check_neg_trait_impl(unsafe impl ! Foo for u32 {})
@@ -49,6 +53,7 @@ fn safe_trait_negative_impl_mismatch() {
         trait Foo {}
         unsafe impl !Foo for u32 {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "neg trait impl" at (mod.rs) failed because
               check_neg_trait_impl(unsafe impl ! Foo for u32 {})
@@ -63,6 +68,7 @@ fn unsafe_trait_mismatch() {
         unsafe trait Foo {}
         impl Foo for u32 {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "safety matches" at (impls.rs) failed because
               condition evaluated to false: `trait_decl.safety == trait_impl.safety`"#]])
@@ -74,6 +80,7 @@ fn safe_trait_mismatch() {
         trait Foo {}
         unsafe impl Foo for u32 {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "safety matches" at (impls.rs) failed because
               condition evaluated to false: `trait_decl.safety == trait_impl.safety`"#]])
