@@ -27,6 +27,7 @@ fn use_of_uninitialized_variable() {
             return x;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[""]])
 }
 
@@ -56,6 +57,7 @@ fn use_of_moved_variable() {
             return z;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[""]])
 }
 
@@ -87,6 +89,7 @@ fn reinit_after_move() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -114,6 +117,7 @@ fn conditional_init_one_branch() {
             return x;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[""]])
 }
 
@@ -144,6 +148,7 @@ fn conditional_init_both_branches() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -171,6 +176,7 @@ fn assign_field_of_uninitialized() {
             return 0 _ u32;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[""]])
 }
 
@@ -204,7 +210,8 @@ fn partial_move_use_sibling() {
                     let b: Datum = x.second;
                     return b;
                 }
-            }]).skip_execute().ok()
+            }]).skip_execute()
+       .rustc_ok().ok()
 }
 
 /// After a partial move, using the whole struct should be an error.
@@ -238,7 +245,9 @@ fn partial_move_use_whole() {
                     let b: Pair = x;
                     return 0 _ u32;
                 }
-            }]).err(expect_test::expect![[""]])
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[""]])
 }
 
 /// Moving the same field twice should be an error.
@@ -272,7 +281,9 @@ fn move_same_field_twice() {
                     let b: Datum = x.first;
                     return b;
                 }
-            }]).err(expect_test::expect![[""]])
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[""]])
 }
 
 /// Moving the whole variable should make fields inaccessible.
@@ -306,7 +317,9 @@ fn move_whole_then_access_field() {
                     let b: Datum = x.first;
                     return b;
                 }
-            }]).err(expect_test::expect![[""]])
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[""]])
 }
 
 /// Moving a parent field should make child fields inaccessible.
@@ -338,6 +351,7 @@ fn move_parent_then_access_child() {
             return b;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[""]])
 }
 
@@ -367,7 +381,9 @@ fn move_out_of_shared_ref() {
                         return y;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
                 crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Copy(<&?lt_0 Datum as Derefable>::Target), via: @ wf(?lt_0), assumptions: {@ wf(?lt_0), @ wf(?lt_1)}, env: Env { variables: [?lt_0, ?lt_1], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
                 crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Copy(<&?lt_0 Datum as Derefable>::Target), via: @ wf(?lt_1), assumptions: {@ wf(?lt_0), @ wf(?lt_1)}, env: Env { variables: [?lt_0, ?lt_1], bias: Soundness, pending: [], allow_pending_outlives: true } }
@@ -1026,7 +1042,9 @@ fn move_out_of_mut_ref() {
                         return y;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
                 crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Copy(<&mut ?lt_0 Datum as Derefable>::Target), via: @ wf(?lt_0), assumptions: {@ wf(?lt_0), @ wf(?lt_1)}, env: Env { variables: [?lt_0, ?lt_1], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
                 crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Copy(<&mut ?lt_0 Datum as Derefable>::Target), via: @ wf(?lt_1), assumptions: {@ wf(?lt_0), @ wf(?lt_1)}, env: Env { variables: [?lt_0, ?lt_1], bias: Soundness, pending: [], allow_pending_outlives: true } }
@@ -1686,6 +1704,7 @@ fn move_out_of_borrowed_place() {
             }
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
@@ -1728,6 +1747,7 @@ fn move_in_loop() {
             return 0 _ u32;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[""]])
 }
 
@@ -1748,6 +1768,7 @@ fn uninitialized_return() {
             return x;
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[""]])
 }
 /// Test the holding a shared reference to a local
@@ -1774,7 +1795,9 @@ fn mutable_ref_prevents_mutation() {
                         return *v2;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = v1 : i32
@@ -1812,7 +1835,9 @@ fn shared_ref_prevents_mutation() {
                         return *v2;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = v1 : i32
@@ -1861,6 +1886,7 @@ fn min_problem_case_3() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -1890,7 +1916,9 @@ fn drop_while_borrowed() {
                         return *v2;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = v1 : i32
@@ -1934,6 +1962,7 @@ fn drop_after_borrow_dead() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -1962,7 +1991,9 @@ fn drop_while_mutably_borrowed() {
                         return *v2;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = v1 : i32
@@ -2004,7 +2035,9 @@ fn drop_on_break_while_borrowed() {
                         return *v2;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = v1 : i32
@@ -2049,6 +2082,7 @@ fn too_min_problem_case_3() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2063,7 +2097,9 @@ fn undeclared_universal_region_relationship() {
                         return v2;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: !lt_1 : !lt_2, via: @ wf(?lt_0), assumptions: {@ wf(?lt_0)}, env: Env { variables: [!lt_1, !lt_2, ?lt_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
             crates/formality-rust/src/prove/prove/prove/prove_outlives.rs:8:1: no applicable rules for prove_outlives { a: !lt_1, b: !lt_2, assumptions: {@ wf(?lt_0)}, env: Env { variables: [!lt_1, !lt_2, ?lt_0], bias: Soundness, pending: [], allow_pending_outlives: false } }"#]])
@@ -2081,7 +2117,9 @@ fn undeclared_universal_region_relationship_no_return() {
                         output = v1;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_outlives.rs:8:1: no applicable rules for prove_outlives { a: !lt_0, b: !lt_1, assumptions: {}, env: Env { variables: [!lt_0, !lt_1], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
             crates/formality-rust/src/prove/prove/prove/prove_outlives.rs:8:1: no applicable rules for prove_outlives { a: !lt_0, b: !lt_1, assumptions: {}, env: Env { variables: [!lt_0, !lt_1], bias: Soundness, pending: [], allow_pending_outlives: false } }"#]])
@@ -2103,6 +2141,7 @@ fn declared_universal_region_relationship() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2120,6 +2159,7 @@ fn declared_transitive_universal_region_relationship() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2134,7 +2174,9 @@ fn undeclared_transitive_universal_region_relationship() {
                 {
                     return v1;
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: !lt_0 : !lt_2, via: !lt_0 : !lt_1, assumptions: {!lt_0 : !lt_1}, env: Env { variables: [!lt_0, !lt_1, !lt_2], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
             crates/formality-rust/src/prove/prove/prove/prove_outlives.rs:8:1: no applicable rules for prove_outlives { a: !lt_0, b: !lt_2, assumptions: {!lt_0 : !lt_1}, env: Env { variables: [!lt_0, !lt_1, !lt_2], bias: Soundness, pending: [], allow_pending_outlives: false } }"#]])
@@ -2158,6 +2200,7 @@ fn problem_case_4() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2193,6 +2236,7 @@ fn storage_dead_while_borrowed() {
             }
         };
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             MaybeFnBody expected
 
@@ -2291,6 +2335,7 @@ fn cfg_union_approx_cause_false_error() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2311,7 +2356,9 @@ fn continue_drops_borrowed_local_false_edge() {
                         r; // only an error because of false edges, assumption that all loops terminate
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = y : i32
@@ -2357,7 +2404,9 @@ fn continue_drops_borrowed_local_loop_carried() {
                         }
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = y : i32
@@ -2414,7 +2463,9 @@ fn break_drops_borrowed_local() {
                         return *r;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = x : i32
@@ -2470,6 +2521,7 @@ fn continue_drops_local_borrow_dead() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2498,6 +2550,7 @@ fn integer_in_outer_scope() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2541,7 +2594,9 @@ fn write_to_borrowed_before_continue() {
                         return *p;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = a : u32
@@ -2603,6 +2658,7 @@ fn if_false_borrowck() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2635,7 +2691,9 @@ fn write_to_borrowed_before_zero_iteration_loop() {
                         return *p;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = a : u32
@@ -2676,6 +2734,7 @@ fn call_generic_fn_with_turbofish() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2698,6 +2757,7 @@ fn call_pass_ref() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2726,6 +2786,7 @@ fn call_generic_fn_with_turbofish_upcast() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2751,7 +2812,9 @@ fn call_generic_fn_with_turbofish_missing_relation_upcast() {
                     let r: &'b u32 = identity::<&'b u32>(a);
                     return r;
                 }
-            }]).err(expect_test::expect!["crates/formality-rust/src/prove/prove/prove/prove_outlives.rs:8:1: no applicable rules for prove_outlives { a: !lt_0, b: !lt_1, assumptions: {}, env: Env { variables: [!lt_0, !lt_1], bias: Soundness, pending: [], allow_pending_outlives: false } }"])
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect!["crates/formality-rust/src/prove/prove/prove/prove_outlives.rs:8:1: no applicable rules for prove_outlives { a: !lt_0, b: !lt_1, assumptions: {}, env: Env { variables: [!lt_0, !lt_1], bias: Soundness, pending: [], allow_pending_outlives: false } }"])
 }
 
 /// Test call to a generic function using turbofish syntax with lifetime and type.
@@ -2768,6 +2831,7 @@ fn call_generic_fn_with_turbofish_lifetime_type() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2789,6 +2853,7 @@ fn call_while_borrow_live() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2811,7 +2876,9 @@ fn call_mut_under_shared_borrow() {
                         return *p;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = v : u32
@@ -2843,6 +2910,7 @@ fn struct_disjoint_field_borrows() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -2859,7 +2927,9 @@ fn struct_conflicting_field_borrows() {
                         return *b1;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = p : Point . x : u32
@@ -2893,6 +2963,7 @@ fn struct_construction_with_borrowed_local() {
             }
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
         the rule "borrow of disjoint places" at (nll.rs) failed because
           condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
@@ -2930,7 +3001,9 @@ fn struct_with_mutable_reference_locks_local() {
                         return *(w.value);
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: @ wf(Wrapper<?lt_0>), via: @ wf(?lt_0), assumptions: {@ wf(?lt_0)}, env: Env { variables: [?lt_0], bias: Soundness, pending: [], allow_pending_outlives: true } }
 
             crates/formality-rust/src/prove/prove/prove/prove_wf.rs:14:1: no applicable rules for prove_wf { goal: ?lt_0, assumptions: {@ wf(?lt_0)}, env: Env { variables: [?lt_0], bias: Soundness, pending: [], allow_pending_outlives: true } }"#]])
@@ -2953,6 +3026,7 @@ fn loan_before_return_does_not_affect_merged_paths() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok();
 }
 
@@ -2978,6 +3052,7 @@ fn outlive_before_return_does_not_affect_merged_paths() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok();
 }
 
@@ -2995,6 +3070,7 @@ fn loan_before_return_does_not_affect_dead_code_after() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok();
 }
 
@@ -3015,6 +3091,7 @@ fn if_else_paths_independent() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok();
 }
 
@@ -3043,7 +3120,9 @@ fn loan_cannot_outlive_lifetime_fail() {
                         return 0 _ u32;
                     }
                 }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "borrow of disjoint places" at (nll.rs) failed because
               condition evaluated to false: `place_disjoint_from_place(&loan.place, &access.place)`
                 &loan.place = x : u32
@@ -3083,5 +3162,6 @@ fn loan_cannot_outlive_lifetime_pass() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }

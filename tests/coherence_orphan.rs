@@ -9,7 +9,9 @@ fn neg_CoreTrait_for_CoreStruct_in_Foo() {
             },
             crate foo {
                 impl !CoreTrait for CoreStruct {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "fundamental rigid type" at (is_local.rs) failed because
               condition evaluated to false: `is_fundamental(decls, name)`
                 decls = program([crate core { trait CoreTrait <ty> { } struct CoreStruct { } }, crate foo { impl ! CoreTrait for CoreStruct {} }], 222)
@@ -44,7 +46,9 @@ fn mirror_CoreStruct() {
             },
             crate foo {
                 impl CoreTrait for <CoreStruct as Mirror>::Assoc {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "fundamental rigid type" at (is_local.rs) failed because
               condition evaluated to false: `is_fundamental(decls, name)`
                 decls = program([crate core { trait CoreTrait <ty> { } struct CoreStruct { } trait Mirror <ty> { type Assoc : [] ; } impl <ty> Mirror for ^ty0_0 { type Assoc = ^ty1_0 ; } }, crate foo { impl CoreTrait for <CoreStruct as Mirror>::Assoc { } }], 222)
@@ -81,6 +85,7 @@ fn mirror_FooStruct() {
         impl CoreTrait for <FooStruct as Mirror>::Assoc {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -95,6 +100,7 @@ fn covered_VecT() {
         impl<T> CoreTrait<FooStruct> for Vec<T> {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -106,7 +112,9 @@ fn uncovered_T() {
             crate foo {
                 struct FooStruct {}
                 impl<T> CoreTrait<FooStruct> for T {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: !ty_0, assumptions: {}, env: Env { variables: [!ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
             crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:19:1: no applicable rules for prove_normalize { p: !ty_0, assumptions: {}, env: Env { variables: [!ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
@@ -133,7 +141,9 @@ fn alias_to_unit() {
             crate foo {
                 struct FooStruct {}
                 impl CoreTrait for <FooStruct as Unit>::Assoc {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "fundamental rigid type" at (is_local.rs) failed because
               condition evaluated to false: `is_fundamental(decls, name)`
                 decls = program([crate core { trait CoreTrait <ty> { } trait Unit <ty> { type Assoc : [] ; } impl <ty> Unit for ^ty0_0 { type Assoc = () ; } }, crate foo { struct FooStruct { } impl CoreTrait for <FooStruct as Unit>::Assoc { } }], 222)
@@ -155,7 +165,9 @@ fn CoreTrait_for_CoreStruct_in_Foo() {
             },
             crate foo {
                 impl CoreTrait for CoreStruct {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "fundamental rigid type" at (is_local.rs) failed because
               condition evaluated to false: `is_fundamental(decls, name)`
                 decls = program([crate core { trait CoreTrait <ty> { } struct CoreStruct { } }, crate foo { impl CoreTrait for CoreStruct { } }], 222)
@@ -193,5 +205,6 @@ fn CoreTraitLocal_for_AliasToKnown_in_Foo() {
         impl CoreTrait<FooStruct> for <() as Unit>::Assoc {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }

@@ -14,5 +14,6 @@ fn custom_ptr() {
         }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }

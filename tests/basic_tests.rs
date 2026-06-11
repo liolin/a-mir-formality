@@ -31,7 +31,9 @@ fn hello_world_fail() {
                 trait Bar<T> where T: Baz {}
 
                 trait Baz {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
                 crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: @ WellFormedTraitRef(Bar(!ty_0, !ty_1)), via: Bar(!ty_0, !ty_1), assumptions: {Bar(!ty_0, !ty_1)}, env: Env { variables: [!ty_1, !ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
                 crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Baz(!ty_1), via: Bar(!ty_0, !ty_1), assumptions: {Bar(!ty_0, !ty_1)}, env: Env { variables: [!ty_1, !ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
@@ -55,6 +57,7 @@ fn hello_world() {
         impl<T> Bar<T> for () where T: Baz {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -70,6 +73,7 @@ fn basic_where_clauses_pass() {
         impl <T> B for T {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 #[test]
@@ -80,7 +84,9 @@ fn basic_where_clauses_fail() {
                 trait B { }
 
                 trait WellFormed where for<T> u32: A<T> { }
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: @ WellFormedTraitRef(A(u32, !ty_1)), via: A(u32, ?ty_2), assumptions: {for <ty> A(u32, ^ty0_0)}, env: Env { variables: [!ty_1, ?ty_2], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
             crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: B(!ty_0), via: A(u32, ?ty_1), assumptions: {for <ty> A(u32, ^ty0_0)}, env: Env { variables: [!ty_0, ?ty_1], bias: Soundness, pending: [], allow_pending_outlives: false } }
@@ -97,6 +103,7 @@ fn basic_adt_variant_dup() {
             Baz{},
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
         the rule "check adt" at (adts.rs) failed because
           variant "Baz" defined multiple times"#]])
@@ -110,6 +117,7 @@ fn basic_adt_field_dup() {
             baz: (),
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
         the rule "check adt" at (adts.rs) failed because
           field "baz" of variant "struct" defined multiple times"#]])
@@ -123,6 +131,7 @@ fn trait_items_with_duplicate_fn_names() {
             fn a() -> ();
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check trait" at (traits.rs) failed because
               the function name `a` is defined multiple times"#]]);
@@ -136,6 +145,7 @@ fn trait_items_with_duplicate_associated_type_names() {
             type Assoc : [];
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check trait" at (traits.rs) failed because
               the associated type name `Assoc` is defined multiple times"#]]);
@@ -148,6 +158,7 @@ fn crate_with_duplicate_item_names() {
 
         enum A {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check crate" at (mod.rs) failed because
               the item name `A` is defined multiple times"#]]);
@@ -157,6 +168,7 @@ fn crate_with_duplicate_item_names() {
 
         trait a {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check crate" at (mod.rs) failed because
               the trait name `a` is defined multiple times"#]]);
@@ -166,6 +178,7 @@ fn crate_with_duplicate_item_names() {
 
         fn a() -> () { trusted }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check crate" at (mod.rs) failed because
               the function name `a` is defined multiple times"#]]);
@@ -176,6 +189,7 @@ fn crate_with_duplicate_item_names() {
         fn a() -> () { trusted }
     }])
     .skip_execute()
+    .rustc_ok()
     .ok();
 }
 
@@ -187,6 +201,7 @@ fn basic_impl_dup() {
         impl MyTrait for MyStruct {}
         impl MyTrait for MyStruct {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
         the rule "check crate" at (mod.rs) failed because
           `impl MyTrait for MyStruct { }` is defined multiple times"#]]);
@@ -200,6 +215,7 @@ fn basic_neg_impl_dup() {
         impl !MyTrait for MyStruct {}
         impl !MyTrait for MyStruct {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
         the rule "check crate" at (mod.rs) failed because
           `impl ! MyTrait for MyStruct {}` is defined multiple times"#]]);
@@ -214,6 +230,7 @@ fn impl_missing_required_fn() {
         struct MyStruct {}
         impl Foo for MyStruct {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check_trait_impl" at (impls.rs) failed because
               not all trait items implemented, missing: `bar`"#]]);
@@ -231,6 +248,7 @@ fn impl_missing_one_of_two_fns() {
             fn bar(self_: u32) -> u32 {trusted}
         }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check_trait_impl" at (impls.rs) failed because
               not all trait items implemented, missing: `baz`"#]]);
@@ -246,5 +264,6 @@ fn impl_with_default_fn_body_ok() {
         impl Foo for MyStruct {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok();
 }

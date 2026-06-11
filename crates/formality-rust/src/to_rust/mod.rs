@@ -45,7 +45,9 @@ pub fn create_workspace(crates: &Crates, root_directory: &std::path::Path) -> Fa
     use std::io::Write;
 
     let mut ctx = context::Context::default();
-    let crates = crates::build_crates(&mut ctx, crates)?;
+
+    let crates = crate::check::with_core_crate(crates);
+    let crates = crates::build_crates(&mut ctx, &crates)?;
     let contains_core = crates.get(MY_CORE_CRATE_NAME).is_some();
     let crates_path = root_directory.join("crates");
     let root_toml_path = root_directory.join("Cargo.toml");

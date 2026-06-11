@@ -17,6 +17,7 @@ fn drop_impl_simple_struct() {
         }
     ])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -35,6 +36,7 @@ fn drop_impl_generic_struct() {
         }
     ])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -51,6 +53,7 @@ fn drop_impl_generic_no_where_clauses() {
         }
     ])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -75,6 +78,7 @@ fn drop_impl_subset_where_clauses() {
         }
     ])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -96,7 +100,9 @@ fn drop_impl_extra_where_clause() {
             impl<T> Drop for MyStruct<T> where T: Clone {}
         }
     ])
-    .err(expect_test::expect![[r#"
+
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
         crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: Clone(!ty_0), via: Drop(MyStruct<!ty_0>), assumptions: {Drop(MyStruct<!ty_0>)}, env: Env { variables: [!ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
         the rule "trait implied bound" at (prove_wc.rs) failed because
@@ -118,7 +124,9 @@ fn drop_impl_concrete_type_param() {
             impl Drop for MyStruct<u32> {}
         }
     ])
-    .err(expect_test::expect![[r#"
+
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
         crates/formality-rust/src/prove/prove/prove/prove_via.rs:9:1: no applicable rules for prove_via { goal: MyStruct<!ty_0> = MyStruct<u32>, via: Drop(MyStruct<!ty_0>), assumptions: {Drop(MyStruct<!ty_0>)}, env: Env { variables: [!ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
 
         crates/formality-rust/src/prove/prove/prove/prove_normalize.rs:55:1: no applicable rules for prove_normalize_via { goal: MyStruct<!ty_0>, via: Drop(MyStruct<!ty_0>), assumptions: {Drop(MyStruct<!ty_0>)}, env: Env { variables: [!ty_0], bias: Soundness, pending: [], allow_pending_outlives: false } }
@@ -149,6 +157,7 @@ fn drop_impl_for_non_adt() {
             impl Drop for u32 {}
         }
     ])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
         the rule "Drop impl is always applicable" at (impls.rs) failed because
           Drop impl self type must be a struct or enum, got `u32`"#]])

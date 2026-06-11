@@ -126,7 +126,9 @@ fn u32_not_u32_impls() {
                 trait Foo {}
                 impl Foo for u32 {}
                 impl !Foo for u32 {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             failed at (proven_set.rs) because
               found an unconditionally true solution Constraints { env: Env { variables: [], bias: Completeness, pending: [], allow_pending_outlives: false }, known_true: true, substitution: {} }"#]])
 }
@@ -144,6 +146,7 @@ fn neg_CoreTrait_for_CoreStruct_implies_no_overlap() {
         impl FooTrait for CoreStruct {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -158,6 +161,7 @@ fn foo_crate_cannot_assume_CoreStruct_does_not_impl_CoreTrait() {
         impl<T> FooTrait for T where T: CoreTrait {}
         impl FooTrait for CoreStruct {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check_coherence" at (coherence.rs) failed because
               impls may overlap:
@@ -171,7 +175,9 @@ fn T_where_Foo_not_u32_impls() {
                 trait Foo {}
                 impl<T> Foo for T where T: Foo {}
                 impl !Foo for u32 {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "check_trait_impl" at (impls.rs) failed because
               failed to prove {! Foo(!ty_1)} given {Foo(!ty_1)}, got [Constraints { env: Env { variables: [!ty_1], bias: Soundness, pending: [], allow_pending_outlives: false }, known_true: false, substitution: {} }]"#]])
 }
@@ -186,6 +192,7 @@ fn u32_T_where_T_Is_impls() {
         trait Is {}
         impl Is for u32 {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check_coherence" at (coherence.rs) failed because
               impls may overlap:
@@ -203,6 +210,7 @@ fn u32_T_where_T_Not_impls() {
         trait Not {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -213,6 +221,7 @@ fn u32_u32_impls() {
         impl Foo for u32 {}
         impl Foo for u32 {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
         the rule "check crate" at (mod.rs) failed because
           `impl Foo for u32 { }` is defined multiple times"#]])
@@ -226,6 +235,7 @@ fn u32_i32_impls() {
         impl Foo for i32 {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -236,6 +246,7 @@ fn u32_T_impls() {
         impl Foo for u32 {}
         impl<T> Foo for T {}
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check_coherence" at (coherence.rs) failed because
               impls may overlap:
@@ -254,6 +265,7 @@ fn T_and_T_bar() {
 
         impl<T> Foo for T where T: Bar { }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check_coherence" at (coherence.rs) failed because
               impls may overlap:
@@ -274,6 +286,7 @@ fn T_and_Local_Bar_T() {
 
         struct LocalType { }
     }])
+    .rustc_err(expect_test::expect![[]])
     .err(expect_test::expect![[r#"
             the rule "check_coherence" at (coherence.rs) failed because
               impls may overlap:
@@ -304,6 +317,7 @@ fn is_local_unknowable_trait_ref() {
         impl<T> Overlap<LocalType> for () {}
     }])
     .skip_execute()
+    .rustc_ok()
     .ok()
 }
 
@@ -330,7 +344,9 @@ fn is_local_with_unconstrained_self_ty_blanket_impl() {
                 where
                     <T as Project>::Assoc: Foo<U> {}
                 impl<T> Overlap<LocalType> for T {}
-            }]).err(expect_test::expect![[r#"
+            }])
+    .rustc_err(expect_test::expect![[]])
+        .err(expect_test::expect![[r#"
             the rule "check_coherence" at (coherence.rs) failed because
               impls may overlap:
               impl <ty, ty> Overlap <^ty0_1> for ^ty0_0 where <^ty0_0 as Project>::Assoc : Foo <^ty0_1> { }

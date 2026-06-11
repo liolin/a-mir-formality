@@ -8,6 +8,7 @@ fn hello_world() {
         }
     }])
     .expect_output("22\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -21,6 +22,7 @@ fn booleans_and_multiple_prints() {
         }
     }])
     .expect_output("1\ntrue\nfalse\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -33,6 +35,7 @@ fn let_bindings() {
         }
     }])
     .expect_output("42\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -46,6 +49,7 @@ fn assignment() {
         }
     }])
     .expect_output("2\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -61,6 +65,7 @@ fn function_calls() {
         }
     }])
     .expect_output("1\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -76,6 +81,7 @@ fn generic_function_calls() {
         }
     }])
     .expect_output("42\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -92,6 +98,7 @@ fn if_statements() {
         }
     }])
     .expect_output("1\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -107,6 +114,7 @@ fn loops_break_continue() {
         }
     }])
     .expect_output("0\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -124,6 +132,7 @@ fn nested_blocks_and_exists() {
         }
     }])
     .expect_output("99\n1\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -138,6 +147,7 @@ fn structs() {
         }
     }])
     .expect_output("10\n20\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -154,6 +164,7 @@ fn references_and_deref() {
         }
     }])
     .expect_output("42\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -168,6 +179,7 @@ fn usize_isize() {
         }
     }])
     .expect_output("100\n200\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -185,6 +197,7 @@ fn multiple_calls_in_sequence() {
         }
     }])
     .expect_output("1\n2\n3\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -198,6 +211,7 @@ fn nested_calls() {
         }
     }])
     .expect_output("42\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -215,6 +229,7 @@ fn functions_calling_other_functions() {
         }
     }])
     .expect_output("7\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -235,6 +250,7 @@ fn transitive_monomorphization() {
         }
     }])
     .expect_output("99\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -248,6 +264,7 @@ fn generic_function_multiple_type_params() {
         }
     }])
     .expect_output("10\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -261,6 +278,7 @@ fn generic_struct() {
         }
     }])
     .expect_output("42\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -278,6 +296,7 @@ fn ref_to_struct_field() {
         }
     }])
     .expect_output("10\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -296,6 +315,7 @@ fn deref_through_ref_to_struct_field() {
         }
     }])
     .expect_output("10\n20\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -315,6 +335,7 @@ fn continue_in_loop() {
         }
     }])
     .expect_output("0\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -333,6 +354,7 @@ fn nested_loops_break_outer() {
         }
     }])
     .expect_output("1\n2\n3\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -353,6 +375,7 @@ fn if_else_inside_loop_with_breaks() {
         }
     }])
     .expect_output("1\n3\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -374,6 +397,7 @@ fn multiple_breaks_same_label() {
         }
     }])
     .expect_output("2\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -391,6 +415,7 @@ fn mut_reference() {
         }
     }])
     .expect_output("2\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -408,6 +433,7 @@ fn reborrow_shared() {
         }
     }])
     .expect_output("42\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -424,6 +450,7 @@ fn exists_with_lifetime_parameterized_type() {
         }
     }])
     .expect_output("55\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -440,6 +467,7 @@ fn return_from_inside_loop() {
         }
     }])
     .expect_output("77\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -458,6 +486,7 @@ fn return_from_nested_block_inside_loop() {
         }
     }])
     .expect_output("88\n")
+    .rustc_ok()
     .ok()
 }
 
@@ -474,5 +503,6 @@ fn break_from_labeled_block() {
         }
     }])
     .expect_output("1\n3\n")
+    .rustc_ok()
     .ok()
 }
