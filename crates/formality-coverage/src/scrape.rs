@@ -31,6 +31,7 @@ pub struct Rule {
     pub line: u32,
     /// Premises listed above the `---` separator, in source order.
     pub premises: Vec<Premise>,
+    pub conclusion: Conclusion,
 }
 
 /// One premise within a rule's body. `line` is the premise's source line,
@@ -58,6 +59,12 @@ pub enum PremiseKind {
     /// Did not match any known premise shape, treated as fallible so we
     /// never mistakenly mark a rule as unblameable.
     Other,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Conclusion {
+    pub raw_text: String,
+    pub line: u32,
 }
 
 /// Walk `root` recursively and scrape every `.rs` file for `judgment_fn!`
@@ -248,12 +255,14 @@ fn extract_rules(block: &str, block_start_line: u32) -> Vec<Rule> {
             let abs_line = rule_text_base_line + separator_line_offset;
 
             let premises = extract_premises(rule_text, rule_text_base_line);
+            let conclusion = extract_conclusion(rule_text, rule_text_base_line);
 
             rules.push(Rule {
                 name: rule_name,
                 raw_text: clean_rule_text(rule_text),
                 line: abs_line,
                 premises,
+                conclusion,
             });
         }
 
@@ -368,6 +377,22 @@ fn clean_rule_text(rule_text: &str) -> String {
         .join("\n")
         .trim()
         .to_string()
+}
+
+fn extract_conclusion(rule_text: &str, base_line: u32) -> Conclusion {
+    static SEPARATOR_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"-{3,}\s*\(".*"\)"#).unwrap());
+
+    let body_end = SEPARATOR_RE
+        .find(rule_text)
+        .map(|m| m.end())
+        .unwrap_or(rule_text.len());
+    let body = &rule_text[body_end..].trim();
+
+    Conclusion {
+        raw_text: body.to_string(),
+        line: base_line,
+    }
 }
 
 fn find_matching_brace(content: &str, open_pos: usize) -> Option<usize> {
