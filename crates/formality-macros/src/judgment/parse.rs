@@ -2,7 +2,10 @@ use proc_macro2::TokenStream;
 use syn::parse::discouraged::Speculative;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::token::Paren;
-use syn::{braced, parenthesized, parse2, Attribute, Expr, Ident, LitStr, Pat, Token};
+use syn::{
+    braced, parenthesized, parse2, parse_quote, Attribute, Expr, ExprParen, Ident, LitStr, Pat,
+    Token,
+};
 
 use std::collections::VecDeque;
 
@@ -414,15 +417,59 @@ impl Parse for Comprehesion {
 
 impl Parse for ComprehensionBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        // TODO: is this really correct?
-        // As far as I understand this, the body are premises, but the last premise must be an implication or a value.
-        // Everything else is an error, and should be reported.
-        let premises = input.parse()?;
-        let conclusion = input.parse()?;
+        let mut premises = VecDeque::new();
+        // Parse a `Premise` until to the first error
+        loop {
+            let fork = input.fork();
+            match fork.parse::<Premise>() {
+                Ok(premise) => {
+                    if input.cursor() == fork.cursor() {
+                        break;
+                    }
+                    input.advance_to(&fork);
+                    premises.push_back(premise);
+                }
+                Err(_) => {
+                    break;
+                }
+            }
+        }
+
+        // If `input` is empty, we consumed everything and the last result of the last `Premise` must be our result.
+        let result = if input.is_empty() {
+            let Some(Premise {
+                kind: PremiseKind::Implication(implication),
+                paren: _,
+                commit_point: _,
+            }) = premises.back()
+            else {
+                return Err(input.error(
+                    "end a for_all collection body with a value or `(judgment => binding)`",
+                ));
+            };
+
+            match &implication.conclusion {
+                Pat::Ident(pat_ident) => parse_quote!(#pat_ident),
+                _ => return Err(input.error(
+                    "after a destructuring judgment result, add an explicit final value to collect",
+                )),
+            }
+        } else {
+            // Otherwise, we must parse an `Expr` which should consume the complete `input`.
+            match input.parse::<Expr>() {
+                Ok(Expr::Binary(expr)) if input.is_empty() => Expr::Paren(ExprParen {
+                    attrs: vec![],
+                    paren_token: Default::default(),
+                    expr: Box::new(Expr::Binary(expr)),
+                }),
+                Ok(expr) if input.is_empty() => expr,
+                _ => return Err(input.error("expected end of comprehension body")),
+            }
+        };
 
         Ok(ComprehensionBody {
-            premises,
-            conclusion,
+            premises: Premises { premises },
+            result,
         })
     }
 }

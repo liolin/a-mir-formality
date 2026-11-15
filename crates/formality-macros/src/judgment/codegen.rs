@@ -561,7 +561,7 @@ pub(crate) fn emit_let(let_: &Let, name: &str, token_stream: TokenStream) -> Tok
                 let cause = e;
                 #record_failure
             }
-        }
+        };
     }
 }
 
@@ -608,7 +608,7 @@ pub(crate) fn emit_comprehension(
         .identifier()
         .expect("should alway be a valid identifier");
     let t = comprehension.binding.ty();
-    let value = &comprehension.loop_var;
+    let value = &comprehension.body.result;
 
     let collected_ident = Ident::new("collected", Span::call_site());
 

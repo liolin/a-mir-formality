@@ -176,11 +176,11 @@ pub struct Comprehesion {
     pub body: ComprehensionBody,
 }
 
-/// ComprehensionBody ::= Premises Expr
+/// ComprehensionBody ::= Premises Expr | Premises (Expr => Expr)
 #[derive(Debug, Clone)]
 pub struct ComprehensionBody {
     pub premises: Premises,
-    pub conclusion: Expr,
+    pub result: Expr,
 }
 
 #[derive(Debug, Clone)]
