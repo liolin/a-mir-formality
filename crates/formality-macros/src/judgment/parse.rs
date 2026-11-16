@@ -1,6 +1,7 @@
 use proc_macro2::TokenStream;
 use syn::parse::discouraged::Speculative;
 use syn::parse::{Parse, ParseStream, Result};
+use syn::spanned::Spanned;
 use syn::token::Paren;
 use syn::{
     braced, parenthesized, parse2, parse_quote, Attribute, Expr, ExprParen, Ident, LitStr, Pat,
@@ -11,16 +12,13 @@ use std::collections::VecDeque;
 
 use crate::judgment::ast::{
     Argument, Assert, Asserts, Ast, Binding, ComprehensionBody, Comprehesion, Conclusion, Debug,
-    Fail, ForAll, If, IfLet, Implication, In, Judgment, JudgmentBody, Let, Premise, PremiseKind,
-    Premises, Rule, Rules, Scope, Signature, Trivial, Trivials,
+    Fail, ForAll, If, IfLet, Implication, In, Judgment, JudgmentBody, Label, Let, Premise,
+    PremiseKind, Premises, Rule, Rules, Scope, Signature, Trivial, Trivials,
 };
 use crate::judgment::keyword;
 
-pub fn parse(tokens: TokenStream) -> Ast {
-    match parse2(tokens) {
-        Ok(ast) => ast,
-        Err(e) => panic!("Could not parse judgment: {e}"),
-    }
+pub fn parse(tokens: TokenStream) -> Result<Ast> {
+    parse2(tokens)
 }
 
 impl Parse for Judgment {
@@ -157,9 +155,10 @@ impl Parse for Trivial {
 
         let hypothesis;
         let conclusion;
+        let span;
         {
             let content;
-            parenthesized!(content in input);
+            span = parenthesized!(content in input).span.span();
 
             hypothesis = content.parse()?;
             content.parse::<Token![=>]>()?;
@@ -167,6 +166,7 @@ impl Parse for Trivial {
         };
 
         Ok(Trivial {
+            span,
             hypothesis,
             conclusion,
         })
@@ -199,17 +199,20 @@ impl Parse for Rule {
             input.parse::<Token![-]>()?;
         }
 
-        let name = {
+        let label = {
             let named;
-            parenthesized!(named in input);
-            named.parse::<LitStr>()?.value()
+            let span = parenthesized!(named in input).span.span();
+            Label {
+                span,
+                name: named.parse::<LitStr>()?,
+            }
         };
 
         let conclusion: Conclusion = input.parse()?;
 
         Ok(Rule {
             premises,
-            name,
+            label,
             conclusion,
         })
     }
@@ -534,14 +537,10 @@ impl Parse for Conclusion {
         let patterns = {
             let inner;
             parenthesized!(inner in content);
-            inner
-                .parse_terminated(Pat::parse_multi_with_leading_vert, Token![,])?
-                .into_iter()
-                .collect()
+            inner.parse_terminated(Pat::parse_multi_with_leading_vert, Token![,])?
         };
 
-        content.parse::<Token![=]>()?;
-        content.parse::<Token![>]>()?;
+        content.parse::<Token![=>]>()?;
 
         let result: Expr = content.parse()?;
 

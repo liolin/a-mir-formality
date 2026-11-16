@@ -1,6 +1,6 @@
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
-use syn::{Attribute, BinOp, Expr, ExprBinary, ExprUnary, Ident, Pat, UnOp};
+use quote::{quote, quote_spanned};
+use syn::{spanned::Spanned, Attribute, BinOp, Expr, ExprBinary, ExprUnary, Ident, Pat, UnOp};
 
 use crate::judgment::ast::{
     self, Argument, Ast, Binding, Comprehesion, Fail, ForAll, If, IfLet, Implication, In, Judgment,
@@ -147,47 +147,55 @@ fn emit_assertions(judgment: &Judgment) -> TokenStream {
     let input_name: Vec<_> = judgment.input_names();
     let assert_expr: Vec<_> = judgment.assertions();
 
+    let assertions = assert_expr
+        .iter()
+        .fold(TokenStream::new(), |mut stream, expr| {
+            let span = expr.span();
+            stream.extend(quote_spanned!(span=> ::formality_core::judgment::JudgmentAssertion::assert(#expr, stringify!(#expr));));
+            stream
+        });
+
     quote! {
         {
             #(
                 #[allow(unused_variables)]
                 let #input_name = &#input_name;
             )*
-            #(
-                // TODO: Respan with #assert_expr
-                ::formality_core::judgment::JudgmentAssertion::assert(#assert_expr, stringify!(#assert_expr));
-            )*
+            #assertions
         }
     }
 }
 
 fn emit_trivials(judgment: &Judgment) -> TokenStream {
-    let trivial_expr: Vec<_> = judgment.trivials_exprs();
-    let trivial_result: Vec<_> = judgment.trivials_results();
-
-    quote! {
-        #(
-            // Trivial cases are an (important) optimization that lets
-            // you cut out all the normal rules.
-            if #trivial_expr {
-                let trivial_result = #trivial_result;
-                let (file, line, column) = ::formality_core::respan!(
-                    #trivial_expr
-                    ((file!(), line!(), column!()))
-                );
-                let proof_tree = ::formality_core::judgment::ProofTree::with_all(
-                    format!("trivial, as {} is true: {trivial_result:?}", stringify!(#trivial_expr)),
-                    Default::default(),
-                    None,
-                    file,
-                    line,
-                    column,
-                    Default::default(),
-                );
-                return ::formality_core::ProvenSet::singleton((trivial_result, proof_tree));
-            }
-        )*
-    }
+    judgment
+        .body
+        .trivials
+        .trivials
+        .iter()
+        .fold(TokenStream::new(), |mut stream, trivial| {
+            let span = trivial.span;
+            let expr = &trivial.hypothesis;
+            let result = &trivial.conclusion;
+            stream.extend(quote_spanned!{span=>
+                                         // Trivial cases are an (important) optimization that lets
+                                         // you cut out all the normal rules.
+                                         if #expr {
+                                             let trivial_result = #result;
+                                             let (file, line, column) = (file!(), line!(), column!());
+                                             let proof_tree = ::formality_core::judgment::ProofTree::with_all(
+                                                 format!("trivial, as {} is true: {trivial_result:?}", stringify!(#expr)),
+                                                 Default::default(),
+                                                 None,
+                                                 file,
+                                                 line,
+                                                 column,
+                                                 Default::default(),
+                                             );
+                                             return ::formality_core::ProvenSet::singleton((trivial_result, proof_tree));
+                                         }
+            });
+            stream
+        })
 }
 
 fn emit_rules(judgment: &Judgment) -> TokenStream {
@@ -208,11 +216,11 @@ fn emit_rule(judgment: &Judgment, rule: &Rule) -> TokenStream {
     let input_names = judgment.input_names();
     let judgment_name = judgment.name();
     let conclusion_name = rule.conclusion.name.clone();
-    let rule_name = rule.name.clone();
+    let rule_name = rule.label.name.clone();
     let match_default = !rule.has_commit_point();
 
     let collect = emit_collect(judgment, rule);
-    let premises = emit_premises(&rule.premises, &rule.name, collect);
+    let premises = emit_premises(&rule.premises, &rule.label.name.value(), collect);
 
     // TODO: Maybe move to its own function
     let rule_stream = quote! {
@@ -226,23 +234,22 @@ fn emit_rule(judgment: &Judgment, rule: &Rule) -> TokenStream {
     };
     let match_and_rule = emit_match(judgment, rule, rule_stream);
 
+    let span = conclusion_name.span();
+    let wrong_name_in_conclusion = quote_spanned! {span=>
+                               // give the user a type error if the name they gave
+                               // in the conclusion is not the same as the name of the
+                               // function
+                               #[allow(dead_code)]
+                               struct WrongJudgmentNameInConclusion;
+                               const _: WrongJudgmentNameInConclusion = {
+                                   let #judgment_name = WrongJudgmentNameInConclusion;
+                                   #conclusion_name
+                               };
+    };
+
     quote! {
         {
-            ::formality_macros::respan!(
-                #conclusion_name
-                (
-                    // give the user a type error if the name they gave
-                    // in the conclusion is not the same as the name of the
-                    // function
-                    #[allow(dead_code)]
-                    struct WrongJudgmentNameInConclusion;
-                    const _: WrongJudgmentNameInConclusion = {
-                        let #judgment_name = WrongJudgmentNameInConclusion;
-                        #conclusion_name
-                    };
-                )
-            );
-
+            #wrong_name_in_conclusion
             if let Some(__JudgmentStruct(#(#input_names),*)) = Some(&input) {
                 let __judgment_name = stringify!(#judgment_name);
                 let __attributes: Vec<(String, String)> = vec![
@@ -284,26 +291,36 @@ fn emit_premises(premises: &Premises, name: &str, token_stream: TokenStream) -> 
         .premises
         .iter()
         .rev()
-        .fold(token_stream, |acc, premise| match &premise.kind {
-            PremiseKind::IfLet(if_let) => emit_if_let(if_let, name, acc),
-            PremiseKind::If(if_) => emit_if(if_, name, acc),
-            PremiseKind::ForAll(for_all) => emit_for_all(for_all, name, acc),
-            PremiseKind::Fail(fail) => emit_fail(fail, name, acc),
-            PremiseKind::Implication(implication) => emit_implication(implication, name, acc),
-            PremiseKind::Let(let_) => emit_let(let_, name, acc),
-            PremiseKind::Comprehension(comprehension) => {
-                emit_comprehension(comprehension, name, acc)
+        .fold(token_stream, |acc, premise| {
+            let span = premise.paren.span.span();
+            match &premise.kind {
+                PremiseKind::IfLet(if_let) => emit_if_let(if_let, span, name, acc),
+                PremiseKind::If(if_) => emit_if(if_, span, name, acc),
+                PremiseKind::ForAll(for_all) => emit_for_all(for_all, span, name, acc),
+                PremiseKind::Fail(fail) => emit_fail(fail, span, name, acc),
+                PremiseKind::Implication(implication) => {
+                    emit_implication(implication, span, name, acc)
+                }
+                PremiseKind::Let(let_) => emit_let(let_, span, name, acc),
+                PremiseKind::Comprehension(comprehension) => {
+                    emit_comprehension(comprehension, span, name, acc)
+                }
+                PremiseKind::In(in_) => emit_in(in_, span, name, acc),
+                PremiseKind::Scope(scope) => emit_scope(scope, span, name, acc),
             }
-            PremiseKind::In(in_) => emit_in(in_, name, acc),
-            PremiseKind::Scope(scope) => emit_scope(scope, name, acc),
         })
 }
 
-pub(crate) fn emit_if_let(if_let: &IfLet, name: &str, token_stream: TokenStream) -> TokenStream {
+pub(crate) fn emit_if_let(
+    if_let: &IfLet,
+    span: Span,
+    name: &str,
+    token_stream: TokenStream,
+) -> TokenStream {
     let e = &if_let.expression;
     let p = &if_let.pattern;
 
-    let record_failure = emit_record_failure(name);
+    let record_failure = emit_record_failure(name, span);
 
     quote! {
         match ::formality_core::judgment::try_catch(|| Ok(#e)) {
@@ -327,9 +344,9 @@ pub(crate) fn emit_if_let(if_let: &IfLet, name: &str, token_stream: TokenStream)
     }
 }
 
-pub(crate) fn emit_if(if_: &If, name: &str, token_stream: TokenStream) -> TokenStream {
+pub(crate) fn emit_if(if_: &If, span: Span, name: &str, token_stream: TokenStream) -> TokenStream {
     let origcond = &if_.expression;
-    let record_failure = emit_record_failure(name);
+    let record_failure = emit_record_failure(name, span);
 
     let (argn, arge, cond) = if_helper(&if_.expression);
 
@@ -369,9 +386,9 @@ fn if_helper(expression: &Expr) -> (Vec<Ident>, Vec<&Expr>, TokenStream) {
     let mut arge = vec![];
     let mut cond = quote! { #expression };
 
-    let arg0n = Ident::new("arg0", Span::call_site());
-    let arg1n = Ident::new("arg1", Span::call_site());
-    let arg2n = Ident::new("arg2", Span::call_site());
+    let arg0n = Ident::new("arg0", Span::mixed_site());
+    let arg1n = Ident::new("arg1", Span::mixed_site());
+    let arg2n = Ident::new("arg2", Span::mixed_site());
 
     match &expression {
         Expr::Call(expr_call) => {
@@ -413,26 +430,6 @@ fn if_helper(expression: &Expr) -> (Vec<Ident>, Vec<&Expr>, TokenStream) {
             }
             _ => {}
         },
-        // Expr::MethodCall(expr_method_call) => {
-        //     let arg0e = &expr_method_call.receiver;
-        //     argn.push(arg0n.clone());
-        //     arge.push(arg0e);
-
-        //     if expr_method_call.args.len() == 2 {
-        //         let arg1e = &expr_method_call.args[0];
-        //         let arg2e = &expr_method_call.args[1];
-        //         argn.push(arg1n);
-        //         argn.push(arg2n);
-        //         arge.push(arg1e);
-        //         arge.push(arg2e);
-        //         cond = quote! { arg0(arg1, arg2) };
-        //     } else if expr_method_call.args.len() == 1 {
-        //         let arg1e = &expr_method_call.args[0];
-        //         argn.push(arg1n);
-        //         arge.push(arg1e);
-        //         cond = quote! { arg0(arg1) };
-        //     }
-        // }
         Expr::Unary(ExprUnary {
             attrs,
             op: UnOp::Not(_),
@@ -449,21 +446,28 @@ fn if_helper(expression: &Expr) -> (Vec<Ident>, Vec<&Expr>, TokenStream) {
     (argn, arge, cond)
 }
 
-pub(crate) fn emit_for_all(for_all: &ForAll, name: &str, token_stream: TokenStream) -> TokenStream {
+pub(crate) fn emit_for_all(
+    for_all: &ForAll,
+    span: Span,
+    name: &str,
+    token_stream: TokenStream,
+) -> TokenStream {
     let collection = &for_all.collection;
     let loop_var = &for_all.identifier;
     let with_var = &for_all.state;
 
-    let record_failure = emit_record_failure(name);
+    let record_failure = emit_record_failure(name, span);
     let collect = quote! { next_carried_and_proof.push(((#(#with_var.clone(),)*), child_proof_trees.clone())); };
     let body = emit_premises(&for_all.body, name, collect);
+
+    let collection_span = collection.span();
+    let debug_information = quote_spanned!(collection_span=> (file!(), line!(), column!()));
 
     quote! {
         {
             let collection = #collection;
-            let (file, line, column) = (file!(), line!(), column!());
-            // TODO: This respan makes problem
-            // let (file, line, column) = ::formality_core::respan!(#collection ((file!(), line!(), column!())));
+            // TODO: Does this work?
+            let (file, line, column) = #debug_information;
 
             let mut alternatives = ::formality_core::Map::new();
             ::formality_core::judgment::insert_smallest_proof(
@@ -521,8 +525,13 @@ pub(crate) fn emit_for_all(for_all: &ForAll, name: &str, token_stream: TokenStre
     }
 }
 
-pub(crate) fn emit_fail(fail: &Fail, name: &str, token_stream: TokenStream) -> TokenStream {
-    let record_failure = emit_record_failure(name);
+pub(crate) fn emit_fail(
+    fail: &Fail,
+    span: Span,
+    name: &str,
+    token_stream: TokenStream,
+) -> TokenStream {
+    let record_failure = emit_record_failure(name, span);
 
     let fmt = &fail.message;
     let arg = &fail.expressions;
@@ -539,8 +548,13 @@ pub(crate) fn emit_fail(fail: &Fail, name: &str, token_stream: TokenStream) -> T
     }
 }
 
-pub(crate) fn emit_let(let_: &Let, name: &str, token_stream: TokenStream) -> TokenStream {
-    let record_failure = emit_record_failure(name);
+pub(crate) fn emit_let(
+    let_: &Let,
+    span: Span,
+    name: &str,
+    token_stream: TokenStream,
+) -> TokenStream {
+    let record_failure = emit_record_failure(name, span);
     let expression = &let_.expression;
     let t = &let_.binding.ty();
     let p = match &let_.binding {
@@ -565,8 +579,8 @@ pub(crate) fn emit_let(let_: &Let, name: &str, token_stream: TokenStream) -> Tok
     }
 }
 
-pub(crate) fn emit_in(in_: &In, name: &str, token_stream: TokenStream) -> TokenStream {
-    let record_failure = emit_record_failure(name);
+pub(crate) fn emit_in(in_: &In, span: Span, name: &str, token_stream: TokenStream) -> TokenStream {
+    let record_failure = emit_record_failure(name, span);
 
     let expression = &in_.expression;
     let pattern = &in_.pattern;
@@ -600,6 +614,7 @@ pub(crate) fn emit_in(in_: &In, name: &str, token_stream: TokenStream) -> TokenS
 
 pub(crate) fn emit_comprehension(
     comprehension: &Comprehesion,
+    span: Span,
     name: &str,
     token_stream: TokenStream,
 ) -> TokenStream {
@@ -610,7 +625,7 @@ pub(crate) fn emit_comprehension(
     let t = comprehension.binding.ty();
     let value = &comprehension.body.result;
 
-    let collected_ident = Ident::new("collected", Span::call_site());
+    let collected_ident = Ident::new("collected", Span::mixed_site());
 
     let def_collected: Let =
         syn::parse2(quote! {let #collected_ident: Vec<_> = Vec::new() }).expect("is always valid");
@@ -643,29 +658,31 @@ pub(crate) fn emit_comprehension(
     }})
     .expect("is always valid");
 
-    let token_stream = emit_let(&conclusion, name, token_stream);
-    let token_stream = emit_for_all(&for_all, name, token_stream);
-    emit_let(&def_collected, name, token_stream)
+    let token_stream = emit_let(&conclusion, span, name, token_stream);
+    let token_stream = emit_for_all(&for_all, span, name, token_stream);
+    emit_let(&def_collected, span, name, token_stream)
 }
 
 pub(crate) fn emit_implication(
     implication: &Implication,
+    span: Span,
     name: &str,
     token_stream: TokenStream,
 ) -> TokenStream {
     if ast::is_unit_pattern(&implication.conclusion) {
-        emit_implication_unit(implication, name, token_stream)
+        emit_implication_unit(implication, span, name, token_stream)
     } else {
-        emit_implication_general(implication, name, token_stream)
+        emit_implication_general(implication, span, name, token_stream)
     }
 }
 
 fn emit_implication_unit(
     implication: &Implication,
+    span: Span,
     name: &str,
     token_stream: TokenStream,
 ) -> TokenStream {
-    let record_failure = emit_record_failure(name);
+    let record_failure = emit_record_failure(name, span);
     let i = &implication.hypothesis;
 
     quote! {
@@ -686,11 +703,11 @@ fn emit_implication_unit(
 
 fn emit_implication_general(
     implication: &Implication,
+    span: Span,
     name: &str,
     token_stream: TokenStream,
 ) -> TokenStream {
-    let record_failure = emit_record_failure(name);
-    let record_failure = emit_record_failure(name);
+    let record_failure = emit_record_failure(name, span);
     let i = &implication.hypothesis;
     let p = &implication.conclusion;
 
@@ -729,8 +746,13 @@ fn emit_implication_general(
     }
 }
 
-pub(crate) fn emit_scope(scope: &Scope, name: &str, token_stream: TokenStream) -> TokenStream {
-    let record_failure = emit_record_failure(name);
+pub(crate) fn emit_scope(
+    scope: &Scope,
+    span: Span,
+    name: &str,
+    token_stream: TokenStream,
+) -> TokenStream {
+    let record_failure = emit_record_failure(name, span);
 
     let expression = &scope.expression;
     let inside = &scope.inside;
@@ -793,19 +815,17 @@ pub(crate) fn emit_scope(scope: &Scope, name: &str, token_stream: TokenStream) -
     }
 }
 
-fn emit_record_failure(rule_name: &str) -> TokenStream {
+fn emit_record_failure(rule_name: &str, span: Span) -> TokenStream {
     // failed_rules, __matched, cause are in scope
-    // TODO: Update parser, such that the Premise span start with the opening paren and ends at the closing paren.
-    let step_expr = quote! {};
+    let span = span.clone();
+    let location = quote_spanned! {span=>
+                              let file = file!();
+                              let line = line!();
+                              let column = column!();
+    };
 
     quote! {
-        // TODO: Get somehow this respan correctly
-        // let file = ::formality_core::respan!(#step_expr (file!()));
-        // let line = ::formality_core::respan!(#step_expr (line!()));
-        // let column = ::formality_core::respan!(#step_expr (column!()));
-        let file = file!();
-        let line = line!();
-        let column = column!();
+        #location
 
         if __matched {
             tracing::debug!(
@@ -840,15 +860,19 @@ fn emit_record_failure(rule_name: &str) -> TokenStream {
 
 fn emit_collect(judgment: &Judgment, rule: &Rule) -> TokenStream {
     let judgment_name = judgment.name();
-    let rule_name = &rule.name;
+    let rule_name = &rule.label.name;
     let result = &rule.conclusion.result;
+    let span = rule.label.name.span();
+
+    let location =
+        quote_spanned! (span=> let (file, line, column) = (file!(), line!(), column!()););
 
     quote! {
         {
             let result = ::formality_core::Upcast::upcast(#result);
             let mut attributes = __attributes.clone();
             attributes.push(("result".to_string(), format!("{:?}", result)));
-            let (file, line, column) = ::formality_core::respan!(#rule_name ((file!(), line!(), column!())));
+            #location
             let proof_tree = ::formality_core::judgment::ProofTree::with_all(
                 __judgment_name,
                 attributes,

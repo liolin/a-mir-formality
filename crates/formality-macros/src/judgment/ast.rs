@@ -1,3 +1,5 @@
+use proc_macro2::Span;
+use syn::punctuated::Punctuated;
 use syn::token::Paren;
 use syn::{Attribute, Expr, Ident, LitStr, Pat, Token, Type, TypeInfer, Visibility};
 
@@ -84,6 +86,7 @@ pub struct Trivials {
 /// Trivial ::= "trivial" "(" Expression "=>" Expression ")"
 #[derive(Debug, Clone)]
 pub struct Trivial {
+    pub span: Span,
     pub hypothesis: Expr,
     pub conclusion: Expr,
 }
@@ -94,12 +97,19 @@ pub struct Rules {
     pub rules: Vec<Rule>,
 }
 
-/// Rule ::= Premises "---" {-} "(" String ")" Conclusion
+/// Rule ::= Premises "---" {-} Label Conclusion
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub premises: Premises,
-    pub name: String,
+    pub label: Label,
     pub conclusion: Conclusion,
+}
+
+/// "(" String ")"
+#[derive(Debug, Clone)]
+pub struct Label {
+    pub span: Span,
+    pub name: LitStr,
 }
 
 /// Premises ::= {Premise}
@@ -207,7 +217,7 @@ pub enum Binding {
 #[derive(Debug, Clone)]
 pub struct Conclusion {
     pub name: Ident,
-    pub patterns: Vec<Pat>,
+    pub patterns: Punctuated<Pat, Token![,]>,
     pub result: Expr,
 }
 
@@ -246,34 +256,6 @@ impl Judgment {
             .assertions
             .iter()
             .map(|Assert { assertion }| assertion)
-            .collect()
-    }
-
-    pub fn trivials_exprs(&self) -> Vec<&Expr> {
-        self.body
-            .trivials
-            .trivials
-            .iter()
-            .map(
-                |Trivial {
-                     hypothesis,
-                     conclusion,
-                 }| hypothesis,
-            )
-            .collect()
-    }
-
-    pub fn trivials_results(&self) -> Vec<&Expr> {
-        self.body
-            .trivials
-            .trivials
-            .iter()
-            .map(
-                |Trivial {
-                     hypothesis,
-                     conclusion,
-                 }| conclusion,
-            )
             .collect()
     }
 

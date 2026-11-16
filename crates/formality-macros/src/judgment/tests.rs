@@ -9,7 +9,7 @@ use expect_test::expect;
 use quote::quote;
 use syn::parse::Parser;
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 
 const DUMMY: LazyCell<TokenStream> = LazyCell::new(|| quote!({ dummy }));
 
@@ -48,7 +48,8 @@ fn parse_axiom() {
                 (foo(program, f, crate_id) => ())
             )
         }
-    });
+    })
+    .unwrap();
     expect![[r#"
         Judgment {
             attributes: [],
@@ -149,7 +150,12 @@ fn parse_axiom() {
                             premises: Premises {
                                 premises: [],
                             },
-                            name: "always true",
+                            label: Label {
+                                span: Span,
+                                name: LitStr {
+                                    token: "always true",
+                                },
+                            },
                             conclusion: Conclusion {
                                 name: Ident(
                                     foo,
@@ -164,6 +170,7 @@ fn parse_axiom() {
                                         ),
                                         subpat: None,
                                     },
+                                    Comma,
                                     Pat::Ident {
                                         attrs: [],
                                         by_ref: None,
@@ -173,6 +180,7 @@ fn parse_axiom() {
                                         ),
                                         subpat: None,
                                     },
+                                    Comma,
                                     Pat::Ident {
                                         attrs: [],
                                         by_ref: None,
@@ -262,6 +270,7 @@ fn parse_trivials() {
         Trivials {
             trivials: [
                 Trivial {
+                    span: Span,
                     hypothesis: Expr::Path {
                         attrs: [],
                         qself: None,
@@ -1972,7 +1981,12 @@ fn codegen_let() {
     };
     let dummy = quote!(dummy stream);
 
-    let s = render_block(codegen::emit_let(&let_, "let", DUMMY.clone()));
+    let s = render_block(codegen::emit_let(
+        &let_,
+        Span::mixed_site(),
+        "let",
+        DUMMY.clone(),
+    ));
     expect![[r#"
         fn __dummy() {
             match ::formality_core::judgment::try_catch::<_>(|| Ok(bound_data)) {
@@ -2029,7 +2043,12 @@ fn codegen_if_let() {
         expression,
     };
 
-    let s = render_block(codegen::emit_if_let(&if_let, "if let", DUMMY.clone()));
+    let s = render_block(codegen::emit_if_let(
+        &if_let,
+        Span::mixed_site(),
+        "if let",
+        DUMMY.clone(),
+    ));
     expect![[r#"
         fn __dummy() {
             match ::formality_core::judgment::try_catch(|| Ok(
@@ -2105,7 +2124,12 @@ fn codegen_if() {
     let expression = syn::parse2(quote! {state.scope_has_label(label)}).unwrap();
     let if_ = ast::If { expression };
 
-    let s = render_block(codegen::emit_if(&if_, "if", DUMMY.clone()));
+    let s = render_block(codegen::emit_if(
+        &if_,
+        Span::mixed_site(),
+        "if",
+        DUMMY.clone(),
+    ));
     expect![[r#"
         fn __dummy() {
             let if_then = ::formality_core::judgment::IfThen::new(
@@ -2168,7 +2192,12 @@ fn codegen_for_all() {
         body,
     };
 
-    let s = render_block(codegen::emit_for_all(&for_all, "for all", DUMMY.clone()));
+    let s = render_block(codegen::emit_for_all(
+        &for_all,
+        Span::mixed_site(),
+        "for all",
+        DUMMY.clone(),
+    ));
     expect![[r#"
         fn __dummy() {
             {
@@ -2283,7 +2312,12 @@ fn codegen_fail() {
         expressions,
     };
 
-    let s = render_block(codegen::emit_fail(&fail, "fail", DUMMY.clone()));
+    let s = render_block(codegen::emit_fail(
+        &fail,
+        Span::mixed_site(),
+        "fail",
+        DUMMY.clone(),
+    ));
     expect![[r#"
         fn __dummy() {
             {
@@ -2339,6 +2373,7 @@ fn codegen_implication_unit() {
 
     let s = render_block(codegen::emit_implication(
         &implication,
+        Span::mixed_site(),
         "implication",
         DUMMY.clone(),
     ));
@@ -2398,6 +2433,7 @@ fn codegen_implication_general() {
 
     let s = render_block(codegen::emit_implication(
         &implication,
+        Span::mixed_site(),
         "implication general",
         DUMMY.clone(),
     ));
@@ -2491,7 +2527,12 @@ fn codegen_in() {
         pattern,
     };
 
-    let s = render_block(codegen::emit_in(&in_, "in", DUMMY.clone()));
+    let s = render_block(codegen::emit_in(
+        &in_,
+        Span::mixed_site(),
+        "in",
+        DUMMY.clone(),
+    ));
     expect![[r#"
         fn __dummy() {
             if let Err(e) = ::formality_core::judgment::member_of(
@@ -2567,7 +2608,12 @@ fn codegen_scope() {
         body,
     };
 
-    let s = render_block(codegen::emit_scope(&scope, "scope", DUMMY.clone()));
+    let s = render_block(codegen::emit_scope(
+        &scope,
+        Span::mixed_site(),
+        "scope",
+        DUMMY.clone(),
+    ));
     expect![[r#"
         fn __dummy() {
             match ::formality_core::judgment::try_catch(|| Ok(
@@ -2721,7 +2767,8 @@ fn codegen_commit_point() {
                         (check_place_move(place) => ())
                 )
         }
-    });
+    })
+    .unwrap();
 
     let s = render_function(codegen::emit(ast));
     expect![[r#"
@@ -2771,12 +2818,12 @@ fn codegen_commit_point() {
                     #[allow(unused)]
                     let input_string = format!("{:?}", input);
                     {
-                        ::formality_macros::respan!(
-                            check_place_move(#[allow(dead_code)] struct
-                            WrongJudgmentNameInConclusion; const _ :
-                            WrongJudgmentNameInConclusion = { let check_place_move =
-                            WrongJudgmentNameInConclusion; check_place_move };)
-                        );
+                        #[allow(dead_code)]
+                        struct WrongJudgmentNameInConclusion;
+                        const _: WrongJudgmentNameInConclusion = {
+                            let check_place_move = WrongJudgmentNameInConclusion;
+                            check_place_move
+                        };
                         if let Some(__JudgmentStruct(place)) = Some(&input) {
                             let __judgment_name = stringify!(check_place_move);
                             let __attributes: Vec<(String, String)> = vec![
@@ -2803,9 +2850,7 @@ fn codegen_commit_point() {
                                                         let mut attributes = __attributes.clone();
                                                         attributes
                                                             .push(("result".to_string(), format!("{:?}", result)));
-                                                        let (file, line, column) = ::formality_core::respan!(
-                                                            "local-ok"((file!(), line!(), column!()))
-                                                        );
+                                                        let (file, line, column) = (file!(), line!(), column!());
                                                         let proof_tree = ::formality_core::judgment::ProofTree::with_all(
                                                             __judgment_name,
                                                             attributes,
@@ -2889,12 +2934,12 @@ fn codegen_commit_point() {
                         }
                     };
                     {
-                        ::formality_macros::respan!(
-                            check_place_move(#[allow(dead_code)] struct
-                            WrongJudgmentNameInConclusion; const _ :
-                            WrongJudgmentNameInConclusion = { let check_place_move =
-                            WrongJudgmentNameInConclusion; check_place_move };)
-                        );
+                        #[allow(dead_code)]
+                        struct WrongJudgmentNameInConclusion;
+                        const _: WrongJudgmentNameInConclusion = {
+                            let check_place_move = WrongJudgmentNameInConclusion;
+                            check_place_move
+                        };
                         if let Some(__JudgmentStruct(place)) = Some(&input) {
                             let __judgment_name = stringify!(check_place_move);
                             let __attributes: Vec<(String, String)> = vec![
