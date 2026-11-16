@@ -137,6 +137,7 @@ pub enum PremiseKind {
     Comprehension(Comprehesion),
     In(In),
     Scope(Scope),
+    Collect(Collect),
 }
 
 #[derive(Debug, Clone)]
@@ -219,6 +220,25 @@ pub struct Conclusion {
     pub name: Ident,
     pub patterns: Punctuated<Pat, Token![,]>,
     pub result: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub enum Collect {
+    Judgment {
+        judgment_name: Ident,
+        result_value: Expr,
+        label: Label,
+    },
+    Scope {
+        scope_proofs: Ident,
+        with_var: Vec<Ident>,
+        inner_proof_trees: Ident,
+    },
+    Loop {
+        next: Ident,
+        with_var: Vec<Ident>,
+        item_proof_trees: Ident,
+    },
 }
 
 impl Judgment {

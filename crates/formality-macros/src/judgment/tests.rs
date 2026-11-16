@@ -1,6 +1,8 @@
 use std::cell::LazyCell;
+use std::collections::VecDeque;
 
 use crate::judgment::ast::Premises;
+use crate::judgment::codegen::State;
 use crate::judgment::{ast, codegen};
 
 use crate::judgment::parse::parse;
@@ -8,10 +10,24 @@ use crate::judgment::parse::parse;
 use expect_test::expect;
 use quote::quote;
 use syn::parse::Parser;
+use syn::Ident;
 
 use proc_macro2::{Span, TokenStream};
 
-const DUMMY: LazyCell<TokenStream> = LazyCell::new(|| quote!({ dummy }));
+const STATE: LazyCell<State> = LazyCell::new(|| {
+    let proof_trees = Box::leak(Box::new(Ident::new(
+        "child_proof_trees",
+        Span::mixed_site(),
+    )));
+    State {
+        name: "test",
+        span: Span::mixed_site(),
+        proof_trees,
+        rest: Premises {
+            premises: VecDeque::new(),
+        },
+    }
+});
 
 fn render_block(tokens: TokenStream) -> String {
     let file: syn::File = syn::parse2(quote! {
@@ -1981,25 +1997,19 @@ fn codegen_let() {
     };
     let dummy = quote!(dummy stream);
 
-    let s = render_block(codegen::emit_let(
-        &let_,
-        Span::mixed_site(),
-        "let",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_let(&let_, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             match ::formality_core::judgment::try_catch::<_>(|| Ok(bound_data)) {
                 Ok(p) => {
                     let proof_tree = ::formality_core::judgment::ProofTree::leaf(
                         format!(
-                            "{} = {p:?}", stringify!(FnBoundData { input_args, output_ty,
-                            where_clauses, body })
+                            "{} = {:?}", stringify!(FnBoundData { input_args, output_ty,
+                            where_clauses, body }), p
                         ),
                     );
                     let FnBoundData { input_args, output_ty, where_clauses, body } = &p;
                     child_proof_trees.push(proof_tree);
-                    { dummy }
                 }
                 Err(e) => {
                     let cause = e;
@@ -2009,11 +2019,11 @@ fn codegen_let() {
                     if __matched {
                         tracing::debug!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "let", cause = cause, file = file, line = line, column = column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                         failed_rules
                             .insert(::formality_core::judgment::FailedRule {
-                                rule_name: Some("let".to_string()),
+                                rule_name: Some("test".to_string()),
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
@@ -2022,7 +2032,7 @@ fn codegen_let() {
                     } else {
                         tracing::trace!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "let", cause = cause, file = file, line = line, column = column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                     };
                 }
@@ -2043,21 +2053,14 @@ fn codegen_if_let() {
         expression,
     };
 
-    let s = render_block(codegen::emit_if_let(
-        &if_let,
-        Span::mixed_site(),
-        "if let",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_if_let(&if_let, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             match ::formality_core::judgment::try_catch(|| Ok(
                 state.live_after_continue(label),
             )) {
                 Ok(value) => {
-                    if let Some(places_live_on_continue) = &value {
-                        { dummy }
-                    } else {
+                    if let Some(places_live_on_continue) = &value {} else {
                         let cause = ::formality_core::judgment::RuleFailureCause::IfLetDidNotMatch {
                             pattern: stringify!(Some(places_live_on_continue)).to_string(),
                             value: format!("{:?}", value),
@@ -2068,12 +2071,11 @@ fn codegen_if_let() {
                         if __matched {
                             tracing::debug!(
                                 "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                                "if let", cause = cause, file = file, line = line, column =
-                                column,
+                                "test", cause = cause, file = file, line = line, column = column,
                             );
                             failed_rules
                                 .insert(::formality_core::judgment::FailedRule {
-                                    rule_name: Some("if let".to_string()),
+                                    rule_name: Some("test".to_string()),
                                     file: file.to_string(),
                                     line: line,
                                     column: column,
@@ -2082,8 +2084,7 @@ fn codegen_if_let() {
                         } else {
                             tracing::trace!(
                                 "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                                "if let", cause = cause, file = file, line = line, column =
-                                column,
+                                "test", cause = cause, file = file, line = line, column = column,
                             );
                         };
                     }
@@ -2096,11 +2097,11 @@ fn codegen_if_let() {
                     if __matched {
                         tracing::debug!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "if let", cause = cause, file = file, line = line, column = column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                         failed_rules
                             .insert(::formality_core::judgment::FailedRule {
-                                rule_name: Some("if let".to_string()),
+                                rule_name: Some("test".to_string()),
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
@@ -2109,7 +2110,7 @@ fn codegen_if_let() {
                     } else {
                         tracing::trace!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "if let", cause = cause, file = file, line = line, column = column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                     };
                 }
@@ -2124,12 +2125,7 @@ fn codegen_if() {
     let expression = syn::parse2(quote! {state.scope_has_label(label)}).unwrap();
     let if_ = ast::If { expression };
 
-    let s = render_block(codegen::emit_if(
-        &if_,
-        Span::mixed_site(),
-        "if",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_if(&if_, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             let if_then = ::formality_core::judgment::IfThen::new(
@@ -2138,8 +2134,7 @@ fn codegen_if() {
             );
             if { state.scope_has_label(label) } {
                 child_proof_trees
-                    .push(::formality_core::judgment::ProofTree::leaf(format!("{if_then:?}")));
-                { dummy }
+                    .push(::formality_core::judgment::ProofTree::leaf(format!("{:?}", if_then)));
             } else {
                 let cause = ::formality_core::judgment::RuleFailureCause::IfFalse(if_then);
                 let file = file!();
@@ -2147,12 +2142,12 @@ fn codegen_if() {
                 let column = column!();
                 if __matched {
                     tracing::debug!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "if",
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
                         cause = cause, file = file, line = line, column = column,
                     );
                     failed_rules
                         .insert(::formality_core::judgment::FailedRule {
-                            rule_name: Some("if".to_string()),
+                            rule_name: Some("test".to_string()),
                             file: file.to_string(),
                             line: line,
                             column: column,
@@ -2160,7 +2155,7 @@ fn codegen_if() {
                         });
                 } else {
                     tracing::trace!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "if",
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
                         cause = cause, file = file, line = line, column = column,
                     );
                 };
@@ -2192,12 +2187,7 @@ fn codegen_for_all() {
         body,
     };
 
-    let s = render_block(codegen::emit_for_all(
-        &for_all,
-        Span::mixed_site(),
-        "for all",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_for_all(&for_all, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             {
@@ -2216,20 +2206,20 @@ fn codegen_for_all() {
                         #[allow(unused)]
                         let () = &loop_carried;
                         let attributes = vec![("item".to_string(), format!("{:?}", variant))];
-                        let mut child_proof_trees = vec![];
+                        let mut item_proof_trees = vec![];
                         let mut next_carried_and_proof = vec![];
                         let if_then = ::formality_core::judgment::IfThen::new(
                             stringify!(dummy_expression),
                             vec![],
                         );
                         if { dummy_expression } {
-                            child_proof_trees
+                            item_proof_trees
                                 .push(
                                     ::formality_core::judgment::ProofTree::leaf(
-                                        format!("{if_then:?}"),
+                                        format!("{:?}", if_then),
                                     ),
                                 );
-                            next_carried_and_proof.push(((), child_proof_trees.clone()));
+                            next_carried_and_proof.push(((), item_proof_trees.clone()));
                         } else {
                             let cause = ::formality_core::judgment::RuleFailureCause::IfFalse(
                                 if_then,
@@ -2240,12 +2230,12 @@ fn codegen_for_all() {
                             if __matched {
                                 tracing::debug!(
                                     "rule {rn} failed because {cause} ({file}:{line}:{column})",
-                                    rn = "for all", cause = cause, file = file, line = line,
-                                    column = column,
+                                    rn = "test", cause = cause, file = file, line = line, column
+                                    = column,
                                 );
                                 failed_rules
                                     .insert(::formality_core::judgment::FailedRule {
-                                        rule_name: Some("for all".to_string()),
+                                        rule_name: Some("test".to_string()),
                                         file: file.to_string(),
                                         line: line,
                                         column: column,
@@ -2254,8 +2244,8 @@ fn codegen_for_all() {
                             } else {
                                 tracing::trace!(
                                     "rule {rn} failed because {cause} ({file}:{line}:{column})",
-                                    rn = "for all", cause = cause, file = file, line = line,
-                                    column = column,
+                                    rn = "test", cause = cause, file = file, line = line, column
+                                    = column,
                                 );
                             };
                         };
@@ -2294,7 +2284,6 @@ fn codegen_for_all() {
                     let () = &loop_carried;
                     let len = child_proof_trees.len();
                     child_proof_trees.push(for_all_proof_trees);
-                    { dummy }
                     child_proof_trees.truncate(len);
                 }
             };
@@ -2312,12 +2301,7 @@ fn codegen_fail() {
         expressions,
     };
 
-    let s = render_block(codegen::emit_fail(
-        &fail,
-        Span::mixed_site(),
-        "fail",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_fail(&fail, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             {
@@ -2336,12 +2320,12 @@ fn codegen_fail() {
                 let column = column!();
                 if __matched {
                     tracing::debug!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "fail",
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
                         cause = cause, file = file, line = line, column = column,
                     );
                     failed_rules
                         .insert(::formality_core::judgment::FailedRule {
-                            rule_name: Some("fail".to_string()),
+                            rule_name: Some("test".to_string()),
                             file: file.to_string(),
                             line: line,
                             column: column,
@@ -2349,7 +2333,7 @@ fn codegen_fail() {
                         });
                 } else {
                     tracing::trace!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "fail",
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
                         cause = cause, file = file, line = line, column = column,
                     );
                 };
@@ -2371,12 +2355,7 @@ fn codegen_implication_unit() {
         conclusion,
     };
 
-    let s = render_block(codegen::emit_implication(
-        &implication,
-        Span::mixed_site(),
-        "implication",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_implication(&implication, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             match ::formality_core::judgment::CheckProven::check_proven(
@@ -2384,7 +2363,6 @@ fn codegen_implication_unit() {
             ) {
                 Ok(proof_tree) => {
                     child_proof_trees.push(proof_tree);
-                    { dummy }
                 }
                 Err(e) => {
                     let cause = e;
@@ -2394,12 +2372,11 @@ fn codegen_implication_unit() {
                     if __matched {
                         tracing::debug!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "implication", cause = cause, file = file, line = line, column =
-                            column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                         failed_rules
                             .insert(::formality_core::judgment::FailedRule {
-                                rule_name: Some("implication".to_string()),
+                                rule_name: Some("test".to_string()),
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
@@ -2408,8 +2385,7 @@ fn codegen_implication_unit() {
                     } else {
                         tracing::trace!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "implication", cause = cause, file = file, line = line, column =
-                            column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                     };
                 }
@@ -2431,12 +2407,7 @@ fn codegen_implication_general() {
         conclusion,
     };
 
-    let s = render_block(codegen::emit_implication(
-        &implication,
-        Span::mixed_site(),
-        "implication general",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_implication(&implication, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             if let Err(e) = ::formality_core::judgment::EachProof::each_proof(
@@ -2446,7 +2417,6 @@ fn codegen_implication_general() {
                     if let MyStruct { adt, flow } = &value {
                         let len = child_proof_trees.len();
                         child_proof_trees.push(proof_tree);
-                        { dummy }
                         assert!(child_proof_trees.len() > len);
                         child_proof_trees.truncate(len);
                     } else {
@@ -2460,12 +2430,11 @@ fn codegen_implication_general() {
                         if __matched {
                             tracing::debug!(
                                 "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                                "implication general", cause = cause, file = file, line = line,
-                                column = column,
+                                "test", cause = cause, file = file, line = line, column = column,
                             );
                             failed_rules
                                 .insert(::formality_core::judgment::FailedRule {
-                                    rule_name: Some("implication general".to_string()),
+                                    rule_name: Some("test".to_string()),
                                     file: file.to_string(),
                                     line: line,
                                     column: column,
@@ -2474,8 +2443,7 @@ fn codegen_implication_general() {
                         } else {
                             tracing::trace!(
                                 "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                                "implication general", cause = cause, file = file, line = line,
-                                column = column,
+                                "test", cause = cause, file = file, line = line, column = column,
                             );
                         };
                     }
@@ -2487,13 +2455,12 @@ fn codegen_implication_general() {
                 let column = column!();
                 if __matched {
                     tracing::debug!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                        "implication general", cause = cause, file = file, line = line, column =
-                        column,
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
+                        cause = cause, file = file, line = line, column = column,
                     );
                     failed_rules
                         .insert(::formality_core::judgment::FailedRule {
-                            rule_name: Some("implication general".to_string()),
+                            rule_name: Some("test".to_string()),
                             file: file.to_string(),
                             line: line,
                             column: column,
@@ -2501,9 +2468,8 @@ fn codegen_implication_general() {
                         });
                 } else {
                     tracing::trace!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                        "implication general", cause = cause, file = file, line = line, column =
-                        column,
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
+                        cause = cause, file = file, line = line, column = column,
                     );
                 };
             }
@@ -2527,12 +2493,7 @@ fn codegen_in() {
         pattern,
     };
 
-    let s = render_block(codegen::emit_in(
-        &in_,
-        Span::mixed_site(),
-        "in",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_in(&in_, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             if let Err(e) = ::formality_core::judgment::member_of(
@@ -2548,7 +2509,6 @@ fn codegen_in() {
                     let wc = &value;
                     let len = child_proof_trees.len();
                     child_proof_trees.push(proof_tree);
-                    { dummy }
                     assert!(child_proof_trees.len() > len);
                     child_proof_trees.truncate(len);
                 },
@@ -2559,12 +2519,12 @@ fn codegen_in() {
                 let column = column!();
                 if __matched {
                     tracing::debug!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "in",
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
                         cause = cause, file = file, line = line, column = column,
                     );
                     failed_rules
                         .insert(::formality_core::judgment::FailedRule {
-                            rule_name: Some("in".to_string()),
+                            rule_name: Some("test".to_string()),
                             file: file.to_string(),
                             line: line,
                             column: column,
@@ -2572,7 +2532,7 @@ fn codegen_in() {
                         });
                 } else {
                     tracing::trace!(
-                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "in",
+                        "rule {rn} failed because {cause} ({file}:{line}:{column})", rn = "test",
                         cause = cause, file = file, line = line, column = column,
                     );
                 };
@@ -2608,12 +2568,7 @@ fn codegen_scope() {
         body,
     };
 
-    let s = render_block(codegen::emit_scope(
-        &scope,
-        Span::mixed_site(),
-        "scope",
-        DUMMY.clone(),
-    ));
+    let s = render_block(codegen::emit_scope(&scope, STATE.clone()));
     expect![[r#"
         fn __dummy() {
             match ::formality_core::judgment::try_catch(|| Ok(
@@ -2627,11 +2582,11 @@ fn codegen_scope() {
                     if __matched {
                         tracing::debug!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "scope", cause = cause, file = file, line = line, column = column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                         failed_rules
                             .insert(::formality_core::judgment::FailedRule {
-                                rule_name: Some("scope".to_string()),
+                                rule_name: Some("test".to_string()),
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
@@ -2640,7 +2595,7 @@ fn codegen_scope() {
                     } else {
                         tracing::trace!(
                             "rule {rn} failed because {cause} ({file}:{line}:{column})", rn =
-                            "scope", cause = cause, file = file, line = line, column = column,
+                            "test", cause = cause, file = file, line = line, column = column,
                         );
                     };
                 }
@@ -2650,19 +2605,19 @@ fn codegen_scope() {
                         #[allow(unused_variables)]
                         let (env, TraitBoundData { where_clauses, trait_items }) = &inside;
                         #[allow(unused_mut)]
-                        let mut child_proof_trees: Vec<::formality_core::judgment::ProofTree> = Vec::new();
+                        let mut inner_proof_trees: Vec<::formality_core::judgment::ProofTree> = Vec::new();
                         let if_then = ::formality_core::judgment::IfThen::new(
                             stringify!(dummy_expression),
                             vec![],
                         );
                         if { dummy_expression } {
-                            child_proof_trees
+                            inner_proof_trees
                                 .push(
                                     ::formality_core::judgment::ProofTree::leaf(
-                                        format!("{if_then:?}"),
+                                        format!("{:?}", if_then),
                                     ),
                                 );
-                            scope_proofs.push(((), child_proof_trees.clone()));
+                            scope_proofs.push(((), inner_proof_trees.clone()));
                         } else {
                             let cause = ::formality_core::judgment::RuleFailureCause::IfFalse(
                                 if_then,
@@ -2673,12 +2628,12 @@ fn codegen_scope() {
                             if __matched {
                                 tracing::debug!(
                                     "rule {rn} failed because {cause} ({file}:{line}:{column})",
-                                    rn = "scope", cause = cause, file = file, line = line, column
+                                    rn = "test", cause = cause, file = file, line = line, column
                                     = column,
                                 );
                                 failed_rules
                                     .insert(::formality_core::judgment::FailedRule {
-                                        rule_name: Some("scope".to_string()),
+                                        rule_name: Some("test".to_string()),
                                         file: file.to_string(),
                                         line: line,
                                         column: column,
@@ -2687,7 +2642,7 @@ fn codegen_scope() {
                             } else {
                                 tracing::trace!(
                                     "rule {rn} failed because {cause} ({file}:{line}:{column})",
-                                    rn = "scope", cause = cause, file = file, line = line, column
+                                    rn = "test", cause = cause, file = file, line = line, column
                                     = column,
                                 );
                             };
@@ -2710,7 +2665,6 @@ fn codegen_scope() {
                                             scope_proof_trees,
                                         ),
                                     );
-                                { dummy }
                                 assert!(child_proof_trees.len() > len);
                                 child_proof_trees.truncate(len);
                             },
@@ -2722,12 +2676,12 @@ fn codegen_scope() {
                             if __matched {
                                 tracing::debug!(
                                     "rule {rn} failed because {cause} ({file}:{line}:{column})",
-                                    rn = "scope", cause = cause, file = file, line = line, column
+                                    rn = "test", cause = cause, file = file, line = line, column
                                     = column,
                                 );
                                 failed_rules
                                     .insert(::formality_core::judgment::FailedRule {
-                                        rule_name: Some("scope".to_string()),
+                                        rule_name: Some("test".to_string()),
                                         file: file.to_string(),
                                         line: line,
                                         column: column,
@@ -2736,7 +2690,7 @@ fn codegen_scope() {
                             } else {
                                 tracing::trace!(
                                     "rule {rn} failed because {cause} ({file}:{line}:{column})",
-                                    rn = "scope", cause = cause, file = file, line = line, column
+                                    rn = "test", cause = cause, file = file, line = line, column
                                     = column,
                                 );
                             };

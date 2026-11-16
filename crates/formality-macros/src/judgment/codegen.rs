@@ -3,11 +3,23 @@ use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, Attribute, BinOp, Expr, ExprBinary, ExprUnary, Ident, Pat, UnOp};
 
 use crate::judgment::ast::{
-    self, Argument, Ast, Binding, Comprehesion, Fail, ForAll, If, IfLet, Implication, In, Judgment,
-    Let, Premise, PremiseKind, Premises, Rule, Scope, Signature,
+    self, Argument, Ast, Binding, Collect, Comprehesion, Fail, ForAll, If, IfLet, Implication, In,
+    Judgment, Label, Let, Premise, PremiseKind, Premises, Rule, Scope, Signature,
 };
 
 pub type Rust = TokenStream;
+
+#[derive(Debug, Clone)]
+pub(crate) struct State<'a> {
+    pub span: Span,
+    pub name: &'a str,
+    pub proof_trees: &'a Ident,
+    pub rest: Premises,
+}
+
+fn internal_ident(name: &str) -> Ident {
+    Ident::new(name, Span::mixed_site())
+}
 
 pub fn emit(judgment: Ast) -> Rust {
     let attributes = emit_attributes(&judgment.attributes);
@@ -78,9 +90,13 @@ fn emit_judgment_struct(judgment: &Judgment) -> TokenStream {
 fn emit_function_body(judgment: &Judgment) -> TokenStream {
     let input_name: Vec<_> = judgment.input_names();
     let input_ty: Vec<_> = judgment.input_tys();
-    let output = judgment.output();
+    let output_ty = judgment.output();
     let name = judgment.name();
     let debug_input_name = judgment.debug_input_names();
+
+    let output = internal_ident("output");
+    let failed_rules = internal_ident("failed_rules");
+    let cache = internal_ident("R");
 
     let assertions = emit_assertions(judgment);
     let trivials = emit_trivials(judgment);
@@ -92,11 +108,11 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
         #assertions
         #trivials
 
-        let mut failed_rules = ::formality_core::set![];
+        let mut #failed_rules = ::formality_core::set![];
         let input = __JudgmentStruct(#(#input_name),*);
-        let output = ::formality_core::judgment::execute_judgment::<
+        let #output = ::formality_core::judgment::execute_judgment::<
             __JudgmentStruct,
-            #output,
+            #output_ty,
         >(
             // Tracing span:
             |input| {
@@ -110,9 +126,9 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
             // Per-judgmnet cache:
             {
                 thread_local! {
-                    static R: ::formality_core::judgment::JudgmentCache<__JudgmentStruct, #output> = Default::default()
+                    static #cache: ::formality_core::judgment::JudgmentCache<__JudgmentStruct, #output_ty> = Default::default()
                 }
-                &R
+                &#cache
             },
 
             // Input:
@@ -120,24 +136,24 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
 
             // Execute rules:
             |input: __JudgmentStruct| {
-                let mut output: ::formality_core::Map<#output, ::formality_core::judgment::ProofTree> = ::formality_core::Map::new();
+                let mut #output: ::formality_core::Map<#output_ty, ::formality_core::judgment::ProofTree> = ::formality_core::Map::new();
 
-                failed_rules.clear();
+                #failed_rules.clear();
 
                 #[allow(unused)]
                 let input_string = format!("{:?}", input);
                 #rules
-                output
+                #output
             },
         );
 
-        if !output.is_empty() {
-            ::formality_core::ProvenSet::proven(output)
+        if !#output.is_empty() {
+            ::formality_core::ProvenSet::proven(#output)
         } else {
             ::formality_core::ProvenSet::failed_rules(
                 &input,
                 ::formality_core::judgment::FailureLocation::caller(),
-                failed_rules,
+                #failed_rules,
             )
         }
     }
@@ -219,15 +235,20 @@ fn emit_rule(judgment: &Judgment, rule: &Rule) -> TokenStream {
     let rule_name = rule.label.name.clone();
     let match_default = !rule.has_commit_point();
 
-    let collect = emit_collect(judgment, rule);
-    let premises = emit_premises(&rule.premises, &rule.label.name.value(), collect);
+    let child_proof_trees = internal_ident("child_proof_trees");
+
+    let premises = emit_premises(
+        rule.premises.clone(),
+        &rule.label.name.value(),
+        &child_proof_trees,
+    );
 
     // TODO: Maybe move to its own function
     let rule_stream = quote! {
         tracing::trace_span!("matched rule", rule = #rule_name, judgment = stringify!(#judgment_name)).in_scope(|| {
             tracing::debug!("matched rule {:?}", #rule_name);
             #[allow(unused_mut)]
-            let mut child_proof_trees: Vec<::formality_core::judgment::ProofTree> = Vec::new();
+            let mut #child_proof_trees: Vec<::formality_core::judgment::ProofTree> = Vec::new();
 
             #premises
         });
@@ -286,76 +307,98 @@ fn emit_match(judgment: &Judgment, rule: &Rule, rule_stream: TokenStream) -> Tok
         )
 }
 
-fn emit_premises(premises: &Premises, name: &str, token_stream: TokenStream) -> TokenStream {
-    premises
-        .premises
-        .iter()
-        .rev()
-        .fold(token_stream, |acc, premise| {
-            let span = premise.paren.span.span();
-            match &premise.kind {
-                PremiseKind::IfLet(if_let) => emit_if_let(if_let, span, name, acc),
-                PremiseKind::If(if_) => emit_if(if_, span, name, acc),
-                PremiseKind::ForAll(for_all) => emit_for_all(for_all, span, name, acc),
-                PremiseKind::Fail(fail) => emit_fail(fail, span, name, acc),
-                PremiseKind::Implication(implication) => {
-                    emit_implication(implication, span, name, acc)
-                }
-                PremiseKind::Let(let_) => emit_let(let_, span, name, acc),
-                PremiseKind::Comprehension(comprehension) => {
-                    emit_comprehension(comprehension, span, name, acc)
-                }
-                PremiseKind::In(in_) => emit_in(in_, span, name, acc),
-                PremiseKind::Scope(scope) => emit_scope(scope, span, name, acc),
-            }
-        })
+fn emit_premises(mut premises: Premises, name: &str, proof_trees: &Ident) -> TokenStream {
+    let Some(premise) = premises.premises.pop_front() else {
+        return TokenStream::new();
+    };
+
+    let span = premise.paren.span.span();
+    let state = State {
+        span,
+        name,
+        proof_trees,
+        rest: premises,
+    };
+
+    match &premise.kind {
+        PremiseKind::IfLet(if_let) => emit_if_let(if_let, state),
+        PremiseKind::If(if_) => emit_if(if_, state),
+        PremiseKind::ForAll(for_all) => emit_for_all(for_all, state),
+        PremiseKind::Fail(fail) => emit_fail(fail, state),
+        PremiseKind::Implication(implication) => emit_implication(implication, state),
+        PremiseKind::Let(let_) => emit_let(let_, state),
+        PremiseKind::Comprehension(comprehension) => emit_comprehension(comprehension, state),
+        PremiseKind::In(in_) => emit_in(in_, state),
+        PremiseKind::Scope(scope) => emit_scope(scope, state),
+        PremiseKind::Collect(collect) => emit_collect(collect, state),
+    }
 }
 
 pub(crate) fn emit_if_let(
     if_let: &IfLet,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
-    let e = &if_let.expression;
+    let expr = &if_let.expression;
     let p = &if_let.pattern;
 
+    let value = internal_ident("value");
+    let err = internal_ident("e");
+    let cause = internal_ident("cause");
+
+    let body = emit_premises(rest, name, proof_trees);
     let record_failure = emit_record_failure(name, span);
 
     quote! {
-        match ::formality_core::judgment::try_catch(|| Ok(#e)) {
-            Ok(value) => {
-                if let #p = &value {
-                    #token_stream
+        match ::formality_core::judgment::try_catch(|| Ok(#expr)) {
+            Ok(#value) => {
+                if let #p = &#value {
+                    #body
                 } else {
-                    let cause = ::formality_core::judgment::RuleFailureCause::IfLetDidNotMatch {
+                    let #cause = ::formality_core::judgment::RuleFailureCause::IfLetDidNotMatch {
                         pattern: stringify!(#p).to_string(),
-                        value: format!("{:?}", value),
+                        value: format!("{:?}", #value),
                     };
                     #record_failure
                 }
             }
 
-            Err(e) => {
-                let cause = e;
+            Err(#err) => {
+                let #cause = #err;
                 #record_failure
             }
         }
     }
 }
 
-pub(crate) fn emit_if(if_: &If, span: Span, name: &str, token_stream: TokenStream) -> TokenStream {
+pub(crate) fn emit_if(
+    if_: &If,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
+) -> TokenStream {
     let origcond = &if_.expression;
     let record_failure = emit_record_failure(name, span);
-
     let (argn, arge, cond) = if_helper(&if_.expression);
+
+    let if_then = internal_ident("if_then");
+    let cause = internal_ident("cause");
+
+    let body = emit_premises(rest, name, proof_trees);
 
     // TODO: Get the arguments for better error reporting
     quote! {
         #(
             let #argn = #arge;
         )*
-        let if_then = ::formality_core::judgment::IfThen::new(
+        let #if_then = ::formality_core::judgment::IfThen::new(
             stringify!(#origcond),
             vec![
                 #(
@@ -369,10 +412,10 @@ pub(crate) fn emit_if(if_: &If, span: Span, name: &str, token_stream: TokenStrea
         if {
             #cond
         } {
-            child_proof_trees.push(::formality_core::judgment::ProofTree::leaf(format!("{if_then:?}")));
-            #token_stream
+            #proof_trees.push(::formality_core::judgment::ProofTree::leaf(format!("{:?}", #if_then)));
+            #body
         } else {
-            let cause = ::formality_core::judgment::RuleFailureCause::IfFalse(if_then);
+            let #cause = ::formality_core::judgment::RuleFailureCause::IfFalse(#if_then);
             #record_failure
         };
     }
@@ -448,78 +491,107 @@ fn if_helper(expression: &Expr) -> (Vec<Ident>, Vec<&Expr>, TokenStream) {
 
 pub(crate) fn emit_for_all(
     for_all: &ForAll,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
     let collection = &for_all.collection;
     let loop_var = &for_all.identifier;
     let with_var = &for_all.state;
 
-    let record_failure = emit_record_failure(name, span);
-    let collect = quote! { next_carried_and_proof.push(((#(#with_var.clone(),)*), child_proof_trees.clone())); };
-    let body = emit_premises(&for_all.body, name, collect);
+    let next_carried_and_proof = internal_ident("next_carried_and_proof");
+    let collection_var = internal_ident("collection");
+    let alternatives = internal_ident("alternatives");
+    let next_alternatives = internal_ident("next_alternatives");
+    let attributes = internal_ident("attributes");
+    let item_proof_trees = internal_ident("item_proof_trees");
+    let file = internal_ident("file");
+    let line = internal_ident("line");
+    let column = internal_ident("column");
+    let loop_carried = internal_ident("loop_carried");
+    let for_all_proof_trees = internal_ident("for_all_proof_trees");
+    let next_carried = internal_ident("next_carried");
+    let next_proof = internal_ident("next_proof");
+    let proofs = internal_ident("proofs");
+    let len = internal_ident("len");
 
     let collection_span = collection.span();
     let debug_information = quote_spanned!(collection_span=> (file!(), line!(), column!()));
 
+    // let collect = quote! { #next_carried_and_proof.push(((#(#with_var.clone(),)*), #item_proof_trees.clone())); };
+    let mut for_all_body = for_all.body.clone();
+    for_all_body.premises.push_back(Premise {
+        kind: PremiseKind::Collect(Collect::Loop {
+            next: next_carried_and_proof.clone(),
+            with_var: with_var.clone(),
+            item_proof_trees: item_proof_trees.clone(),
+        }),
+        paren: Default::default(),
+        commit_point: None,
+    });
+    let inner = emit_premises(for_all_body, name, &item_proof_trees);
+    let body = emit_premises(rest, name, &proof_trees);
+    let record_failure = emit_record_failure(name, span);
+
     quote! {
         {
-            let collection = #collection;
-            // TODO: Does this work?
-            let (file, line, column) = #debug_information;
+            let #collection_var = #collection;
+            let (#file, #line, #column) = #debug_information;
 
-            let mut alternatives = ::formality_core::Map::new();
+            let mut #alternatives = ::formality_core::Map::new();
             ::formality_core::judgment::insert_smallest_proof(
-                &mut alternatives,
+                &mut #alternatives,
                 (#(#with_var.clone(),)*),
                 ::formality_core::judgment::ProofTree::new("for_all", None, vec![]),
             );
-            for #loop_var in collection {
-                let mut next_alternatives = ::formality_core::Map::new();
-                for (loop_carried, for_all_proof_trees) in alternatives {
+            for #loop_var in #collection_var {
+                let mut #next_alternatives = ::formality_core::Map::new();
+                for (#loop_carried, #for_all_proof_trees) in #alternatives {
                     let #loop_var = Clone::clone(&#loop_var);
                     #[allow(unused)]
-                    let (#(#with_var,)*) = &loop_carried;
+                    let (#(#with_var,)*) = &#loop_carried;
 
-                    let attributes = vec![("item".to_string(), format!("{:?}", #loop_var))];
+                    let #attributes = vec![("item".to_string(), format!("{:?}", #loop_var))];
                     // I shadown the outer `child_proof_trees` delibertly, such that the generated code for the premises still uses the correct vector.
-                    let mut child_proof_trees = vec![];
-                    let mut next_carried_and_proof = vec![];
-                    #body
+                    let mut #item_proof_trees = vec![];
+                    let mut #next_carried_and_proof = vec![];
+                    #inner
 
-                    for (next_carried, next_proof) in next_carried_and_proof {
-                        let mut proofs = for_all_proof_trees.children.clone();
-                        proofs.push(::formality_core::judgment::ProofTree::with_all(
+                    for (#next_carried, #next_proof) in #next_carried_and_proof {
+                        let mut #proofs = #for_all_proof_trees.children.clone();
+                        #proofs.push(::formality_core::judgment::ProofTree::with_all(
                             "for_all",
-                            attributes.clone(),
+                            #attributes.clone(),
                             None,
-                            &file[..],
-                            line,
-                            column,
-                            next_proof,
+                            &#file[..],
+                            #line,
+                            #column,
+                            #next_proof,
                         ));
                         ::formality_core::judgment::insert_smallest_proof(
-                            &mut next_alternatives,
-                            next_carried,
-                            ::formality_core::judgment::ProofTree::new("for_all", None, proofs),
+                            &mut #next_alternatives,
+                            #next_carried,
+                            ::formality_core::judgment::ProofTree::new("for_all", None, #proofs),
                         );
                     }
                 }
-                alternatives = next_alternatives;
-                if alternatives.is_empty() {
+                #alternatives = #next_alternatives;
+                if #alternatives.is_empty() {
                     break;
                 }
             }
 
-            for (loop_carried, for_all_proof_trees) in alternatives {
+            for (#loop_carried, #for_all_proof_trees) in #alternatives {
                 #[allow(unused)]
-                let (#(#with_var,)*) = &loop_carried;
+                let (#(#with_var,)*) = &#loop_carried;
 
-                let len = child_proof_trees.len();
-                child_proof_trees.push(for_all_proof_trees);
-                #token_stream
-                child_proof_trees.truncate(len);
+                let #len = #proof_trees.len();
+                #proof_trees.push(#for_all_proof_trees);
+                #body
+                #proof_trees.truncate(#len);
             }
         };
     }
@@ -527,22 +599,28 @@ pub(crate) fn emit_for_all(
 
 pub(crate) fn emit_fail(
     fail: &Fail,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
-    let record_failure = emit_record_failure(name, span);
-
     let fmt = &fail.message;
     let arg = &fail.expressions;
+
+    let message = internal_ident("message");
+    let cause = internal_ident("cause");
+
+    let record_failure = emit_record_failure(name, span);
     quote! {
         {
             #[allow(unused_variables)]
-            let _ = &child_proof_trees;
-            let message = format!(#fmt #(, #arg)*);
+            let _ = &#proof_trees;
+            let #message = format!(#fmt #(, #arg)*);
             #[allow(unused_assignments)]
             { __matched = true; }
-            let cause = ::formality_core::judgment::RuleFailureCause::ExplicitFailure { message };
+            let #cause = ::formality_core::judgment::RuleFailureCause::ExplicitFailure { #message };
             #record_failure
         }
     }
@@ -550,63 +628,85 @@ pub(crate) fn emit_fail(
 
 pub(crate) fn emit_let(
     let_: &Let,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
-    let record_failure = emit_record_failure(name, span);
     let expression = &let_.expression;
     let t = &let_.binding.ty();
     let p = match &let_.binding {
         Binding::Pattern { pattern } => quote! { #pattern },
         Binding::Identifier { identifier, ty } => quote! { #identifier},
     };
+    let proof_tree = internal_ident("proof_tree");
+    let p_var = internal_ident("p");
+    let e = internal_ident("e");
+    let cause = internal_ident("cause");
 
+    let body = emit_premises(rest, name, proof_trees);
+    let record_failure = emit_record_failure(name, span);
     quote! {
         match ::formality_core::judgment::try_catch::<#t>(|| Ok(#expression)) {
-            Ok(p) => {
-                let proof_tree = ::formality_core::judgment::ProofTree::leaf(format!("{} = {p:?}", stringify!(#p)));
-                let #p = &p;
-                child_proof_trees.push(proof_tree);
-                #token_stream
+            Ok(#p_var) => {
+                let #proof_tree = ::formality_core::judgment::ProofTree::leaf(format!("{} = {:?}", stringify!(#p), #p_var));
+                let #p = &#p_var;
+                #proof_trees.push(#proof_tree);
+                #body
             }
 
-            Err(e) => {
-                let cause = e;
+            Err(#e) => {
+                let #cause = #e;
                 #record_failure
             }
         };
     }
 }
 
-pub(crate) fn emit_in(in_: &In, span: Span, name: &str, token_stream: TokenStream) -> TokenStream {
-    let record_failure = emit_record_failure(name, span);
-
+pub(crate) fn emit_in(
+    in_: &In,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
+) -> TokenStream {
     let expression = &in_.expression;
     let pattern = &in_.pattern;
+    let e = internal_ident("e");
+    let value = internal_ident("value");
+    let proof_tree = internal_ident("proof_tree");
+    let len = internal_ident("len");
+    let cause = internal_ident("cause");
+
+    let body = emit_premises(rest, name, proof_trees);
+    let record_failure = emit_record_failure(name, span);
+
     quote! {
-        if let Err(e) = ::formality_core::judgment::member_of(
+        if let Err(#e) = ::formality_core::judgment::member_of(
             #expression,
             || stringify!(#expression).to_string(),
-            |(value, proof_tree)| {
-                let #pattern = &value;
+            |(#value, #proof_tree)| {
+                let #pattern = &#value;
 
                 // Remember the size of the child proof tree stack
-                let len = child_proof_trees.len();
+                let #len = #proof_trees.len();
 
                 // Push this child proof tree
-                child_proof_trees.push(proof_tree);
+                #proof_trees.push(#proof_tree);
 
-                // // Recursively process successors
-                #token_stream
+                #body
 
                 // Restore the original child proof tree stack; note that there may be multiple entries
                 // in case "non-iterative" steps like `(let ...)` and `(if ...)` are interspersed.
-                assert!(child_proof_trees.len() > len);
-                child_proof_trees.truncate(len);
+                assert!(#proof_trees.len() > #len);
+                #proof_trees.truncate(#len);
             },
         ) {
-            let cause = e;
+            let #cause = #e;
             #record_failure
         }
     }
@@ -614,9 +714,12 @@ pub(crate) fn emit_in(in_: &In, span: Span, name: &str, token_stream: TokenStrea
 
 pub(crate) fn emit_comprehension(
     comprehension: &Comprehesion,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
     let p = comprehension
         .binding
@@ -625,16 +728,18 @@ pub(crate) fn emit_comprehension(
     let t = comprehension.binding.ty();
     let value = &comprehension.body.result;
 
-    let collected_ident = Ident::new("collected", Span::mixed_site());
+    let collected = internal_ident("collected");
+    let next = internal_ident("next");
+    let result = internal_ident("result");
 
     let def_collected: Let =
-        syn::parse2(quote! {let #collected_ident: Vec<_> = Vec::new() }).expect("is always valid");
+        syn::parse2(quote! {let #collected: Vec<_> = Vec::new() }).expect("is always valid");
 
     let col: Let = syn::parse2(quote! {
-        let collected = {
-            let mut next = collected.clone();
-            next.push(::formality_core::Upcast::upcast(&#value));
-            next
+        let #collected = {
+            let mut #next = #collected.clone();
+            #next.push(::formality_core::Upcast::upcast(&#value));
+            #next
         }
     })
     .expect("is always valid");
@@ -642,7 +747,7 @@ pub(crate) fn emit_comprehension(
     let mut for_all = ForAll {
         identifier: comprehension.loop_var.clone(),
         collection: comprehension.collection.clone(),
-        state: vec![collected_ident],
+        state: vec![collected.clone()],
         body: comprehension.body.premises.clone(),
     };
     for_all.body.premises.push_back(Premise {
@@ -653,48 +758,76 @@ pub(crate) fn emit_comprehension(
 
     let conclusion: Let = syn::parse2(quote! {
     let #p = {
-        let result: #t = collected.iter().cloned().collect();
-        result
+        let #result: #t = #collected.iter().cloned().collect();
+        #result
     }})
     .expect("is always valid");
 
-    let token_stream = emit_let(&conclusion, span, name, token_stream);
-    let token_stream = emit_for_all(&for_all, span, name, token_stream);
-    emit_let(&def_collected, span, name, token_stream)
+    let premises = Premises {
+        premises: vec![
+            Premise {
+                kind: PremiseKind::Let(def_collected),
+                paren: Default::default(),
+                commit_point: None,
+            },
+            Premise {
+                kind: PremiseKind::ForAll(for_all),
+                paren: Default::default(),
+                commit_point: None,
+            },
+            Premise {
+                kind: PremiseKind::Let(conclusion),
+                paren: Default::default(),
+                commit_point: None,
+            },
+        ]
+        .into(),
+    };
+
+    let comprehension = emit_premises(premises, name, proof_trees);
+    let body = emit_premises(rest, name, proof_trees);
+
+    quote! {
+           #comprehension
+           #body
+    }
 }
 
-pub(crate) fn emit_implication(
-    implication: &Implication,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
-) -> TokenStream {
+pub(crate) fn emit_implication(implication: &Implication, state: State) -> TokenStream {
     if ast::is_unit_pattern(&implication.conclusion) {
-        emit_implication_unit(implication, span, name, token_stream)
+        emit_implication_unit(implication, state)
     } else {
-        emit_implication_general(implication, span, name, token_stream)
+        emit_implication_general(implication, state)
     }
 }
 
 fn emit_implication_unit(
     implication: &Implication,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
-    let record_failure = emit_record_failure(name, span);
     let i = &implication.hypothesis;
+    let proof_tree = internal_ident("proof_tree");
+    let e = internal_ident("e");
+    let cause = internal_ident("cause");
+
+    let record_failure = emit_record_failure(name, span);
+    let body = emit_premises(rest, name, proof_trees);
 
     quote! {
         match ::formality_core::judgment::CheckProven::check_proven(
             #i,
         ) {
-            Ok(proof_tree) => {
-                child_proof_trees.push(proof_tree);
-                #token_stream
+            Ok(#proof_tree) => {
+                #proof_trees.push(#proof_tree);
+                #body
             }
-            Err(e) => {
-                let cause = e;
+            Err(#e) => {
+                let #cause = #e;
                 #record_failure
             }
         }
@@ -703,43 +836,51 @@ fn emit_implication_unit(
 
 fn emit_implication_general(
     implication: &Implication,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
-    let record_failure = emit_record_failure(name, span);
     let i = &implication.hypothesis;
     let p = &implication.conclusion;
+    let e = internal_ident("e");
+    let value = internal_ident("value");
+    let proof_tree = internal_ident("proof_tree");
+    let len = internal_ident("len");
+    let cause = internal_ident("cause");
 
+    let record_failure = emit_record_failure(name, span);
+    let body = emit_premises(rest, name, proof_trees);
     quote! {
-        if let Err(e) = ::formality_core::judgment::EachProof::each_proof(
+        if let Err(#e) = ::formality_core::judgment::EachProof::each_proof(
             #i,
-            |(value, proof_tree)| {
+            |(#value, #proof_tree)| {
                 #[allow(irrefutable_let_patterns)]
-                if let #p = &value {
+                if let #p = &#value {
                     // Remember the size of the child proof tree stack
-                    let len = child_proof_trees.len();
+                    let #len = #proof_trees.len();
 
                     // Push this child proof tree
-                    child_proof_trees.push(proof_tree);
+                    #proof_trees.push(#proof_tree);
 
-                    // Recursively process successors
-                    #token_stream
+                    #body
 
                     // Restore the original child proof tree stack; note that there may be multiple entries
                     // in case "non-iterative" steps like `(let ...)` and `(if ...)` are interspersed.
-                    assert!(child_proof_trees.len() > len);
-                    child_proof_trees.truncate(len);
+                    assert!(#proof_trees.len() > #len);
+                    #proof_trees.truncate(#len);
                 } else {
-                    let cause = ::formality_core::judgment::RuleFailureCause::IfLetDidNotMatch {
+                    let #cause = ::formality_core::judgment::RuleFailureCause::IfLetDidNotMatch {
                         pattern: stringify!(#p).to_string(),
-                        value: format!("{:?}", value),
+                        value: format!("{:?}", #value),
                     };
                     #record_failure
                 }
             },
         ) {
-            let cause = e;
+            let #cause = #e;
             #record_failure
         }
 
@@ -748,65 +889,89 @@ fn emit_implication_general(
 
 pub(crate) fn emit_scope(
     scope: &Scope,
-    span: Span,
-    name: &str,
-    token_stream: TokenStream,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
 ) -> TokenStream {
-    let record_failure = emit_record_failure(name, span);
-
     let expression = &scope.expression;
     let inside = &scope.inside;
     let with_var = &scope.state;
+    let e = internal_ident("e");
+    let cause = internal_ident("cause");
+    let scope_var = internal_ident("scope");
+    let scope_proofs = internal_ident("scope_proofs");
+    let values = internal_ident("values");
+    let inner_proof_trees = internal_ident("inner_proof_trees");
+    let leave_proof_tree = internal_ident("leave_proof_tree");
+    let len = internal_ident("len");
+    let scope_proof_trees = internal_ident("scope_proof_trees");
+    let inside_var = internal_ident("inside");
 
-    let collect =
-        quote! { scope_proofs.push(((#(#with_var.clone(),)*), child_proof_trees.clone())); };
+    let record_failure = emit_record_failure(name, span);
 
-    let body = emit_premises(&scope.body, name, collect);
+    // let collect =
+    //     quote! { #scope_proofs.push(((#(#with_var.clone(),)*), #inner_proof_trees.clone())); };
+
+    let mut scope_body = scope.body.clone();
+    scope_body.premises.push_back(Premise {
+        kind: PremiseKind::Collect(Collect::Scope {
+            scope_proofs: scope_proofs.clone(),
+            with_var: with_var.clone(),
+            inner_proof_trees: inner_proof_trees.clone(),
+        }),
+        paren: Default::default(),
+        commit_point: None,
+    });
+    let inner = emit_premises(scope_body, name, &inner_proof_trees);
+    let body = emit_premises(rest, name, proof_trees);
     quote! {
         match ::formality_core::judgment::try_catch(|| Ok(#expression)) {
-            Err(e) => {
-                let cause = e;
+            Err(#e) => {
+                let #cause = #e;
                 #record_failure
             }
 
-            Ok((scope, inside)) => {
+            Ok((#scope_var, #inside_var)) => {
                 // Prove the nested conditions. They see what is inside the scope
                 // (and, being in a block, what they bind ends with it). Collect
                 // each proof's values for the `with` variables.
-                let mut scope_proofs = vec![];
+                let mut #scope_proofs = vec![];
                 {
                     #[allow(unused_variables)]
-                    let #inside = &inside;
+                    let #inside = &#inside_var;
                     #[allow(unused_mut)]
-                    let mut child_proof_trees: Vec<::formality_core::judgment::ProofTree> = Vec::new();
-                    #body
+                    let mut #inner_proof_trees: Vec<::formality_core::judgment::ProofTree> = Vec::new();
+                    #inner
                 }
 
                 // Leave the scope with each, and continue with what comes out.
-                for (values, inner_proof_trees) in scope_proofs {
-                    if let Err(e) = ::formality_core::judgment::EachProof::each_proof(
-                        ::formality_core::judgment::Scope::leave(&scope, values),
-                        |(values, leave_proof_tree)| {
+                for (#values, #inner_proof_trees) in #scope_proofs {
+                    if let Err(#e) = ::formality_core::judgment::EachProof::each_proof(
+                        ::formality_core::judgment::Scope::leave(&#scope_var, #values),
+                        |(#values, #leave_proof_tree)| {
                             #[allow(unused_variables)]
-                            let (#(#with_var,)*) = &values;
+                            let (#(#with_var,)*) = &#values;
 
-                            let len = child_proof_trees.len();
+                            let #len = #proof_trees.len();
 
-                            let mut scope_proof_trees = inner_proof_trees.clone();
-                            scope_proof_trees.push(leave_proof_tree);
-                            child_proof_trees.push(::formality_core::judgment::ProofTree::new(
+                            let mut #scope_proof_trees = #inner_proof_trees.clone();
+                            #scope_proof_trees.push(#leave_proof_tree);
+                            #proof_trees.push(::formality_core::judgment::ProofTree::new(
                                 "scope",
                                 None,
-                                scope_proof_trees,
+                                #scope_proof_trees,
                             ));
 
-                            #token_stream
+                            #body
 
-                            assert!(child_proof_trees.len() > len);
-                            child_proof_trees.truncate(len);
+                            assert!(#proof_trees.len() > #len);
+                            #proof_trees.truncate(#len);
                         },
                     ) {
-                        let cause = e;
+                        let #cause = #e;
                         #record_failure
                     }
                 }
@@ -817,11 +982,17 @@ pub(crate) fn emit_scope(
 
 fn emit_record_failure(rule_name: &str, span: Span) -> TokenStream {
     // failed_rules, __matched, cause are in scope
+    let file = internal_ident("file");
+    let line = internal_ident("line");
+    let column = internal_ident("column");
+    let cause = internal_ident("cause");
+    let failed_rules = internal_ident("failed_rules");
+
     let span = span.clone();
     let location = quote_spanned! {span=>
-                              let file = file!();
-                              let line = line!();
-                              let column = column!();
+                              let #file = file!();
+                              let #line = line!();
+                              let #column = column!();
     };
 
     quote! {
@@ -831,59 +1002,101 @@ fn emit_record_failure(rule_name: &str, span: Span) -> TokenStream {
             tracing::debug!(
                 "rule {rn} failed because {cause} ({file}:{line}:{column})",
                 rn = #rule_name,
-                cause = cause,
-                file = file,
-                line = line,
-                column = column,
+                cause = #cause,
+                file = #file,
+                line = #line,
+                column = #column,
             );
-            failed_rules.insert(
+            #failed_rules.insert(
                 ::formality_core::judgment::FailedRule {
                     rule_name: Some(#rule_name.to_string()),
-                    file: file.to_string(),
-                    line: line,
-                    column: column,
-                    cause,
+                    file: #file.to_string(),
+                    line: #line,
+                    column: #column,
+                    #cause,
                 }
             );
         } else {
             tracing::trace!(
                 "rule {rn} failed because {cause} ({file}:{line}:{column})",
                 rn = #rule_name,
-                cause = cause,
-                file = file,
-                line = line,
-                column = column,
+                cause = #cause,
+                file = #file,
+                line = #line,
+                column = #column,
             );
         };
     }
 }
 
-fn emit_collect(judgment: &Judgment, rule: &Rule) -> TokenStream {
-    let judgment_name = judgment.name();
-    let rule_name = &rule.label.name;
-    let result = &rule.conclusion.result;
-    let span = rule.label.name.span();
+fn emit_collect(collect: &Collect, state: State) -> TokenStream {
+    let next_carried_and_proof = internal_ident("next_carried_and_proof");
+    match collect {
+        Collect::Judgment {
+            judgment_name,
+            result_value,
+            label,
+        } => emit_collect2(judgment_name, result_value, label, state),
+        Collect::Scope {
+            scope_proofs,
+            with_var,
+            inner_proof_trees,
+        } => {
+            quote! { #scope_proofs.push(((#(#with_var.clone(),)*), #inner_proof_trees.clone())); }
+        }
+        Collect::Loop {
+            next,
+            with_var,
+            item_proof_trees,
+        } => {
+            quote! { #next.push(((#(#with_var.clone(),)*), #item_proof_trees.clone())); }
+        }
+    }
+}
+
+fn emit_collect2(
+    judgment_name: &Ident,
+    result_value: &Expr,
+    label: &Label,
+    State {
+        span,
+        name,
+        proof_trees,
+        rest,
+    }: State,
+) -> TokenStream {
+    let rule_name = &label.name;
+    let span = label.name.span();
+
+    let output = internal_ident("output");
+    let child_proof_trees = internal_ident("child_proof_trees");
+    let file = internal_ident("file");
+    let line = internal_ident("line");
+    let column = internal_ident("column");
+    let attributes = internal_ident("attributes");
+    let proof_tree = internal_ident("proof_tree");
+    let result = internal_ident("result");
 
     let location =
-        quote_spanned! (span=> let (file, line, column) = (file!(), line!(), column!()););
+        quote_spanned! (span=> let (#file, #line, #column) = (file!(), line!(), column!()););
 
     quote! {
         {
-            let result = ::formality_core::Upcast::upcast(#result);
-            let mut attributes = __attributes.clone();
-            attributes.push(("result".to_string(), format!("{:?}", result)));
+            let #result = ::formality_core::Upcast::upcast(#result_value);
+            let mut #attributes = __attributes.clone();
+            #attributes.push(("result".to_string(), format!("{:?}", #result)));
             #location
-            let proof_tree = ::formality_core::judgment::ProofTree::with_all(
+            let #proof_tree = ::formality_core::judgment::ProofTree::with_all(
                 __judgment_name,
-                attributes,
+                #attributes,
                 Some(#rule_name),
-                file,
-                line,
-                column,
-                child_proof_trees.clone(),
+                #file,
+                #line,
+                #column,
+                #child_proof_trees.clone(),
             );
-            tracing::debug!("produced {:?} from rule {:?} in judgment {:?}", result, #rule_name, stringify!(#judgment_name));
-            ::formality_core::judgment::insert_smallest_proof(&mut output, result, proof_tree);
+            tracing::debug!("produced {:?} from rule {:?} in judgment {:?}", #result, #rule_name, stringify!(#judgment_name));
+            ::formality_core::judgment::insert_smallest_proof(&mut #output, #result, #proof_tree);
         };
     }
 }
