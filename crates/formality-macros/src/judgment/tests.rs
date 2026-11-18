@@ -353,7 +353,7 @@ fn parse_if() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -376,7 +376,7 @@ fn parse_fail() {
                     expressions: [],
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -415,7 +415,7 @@ fn parse_fail_with_expr() {
                     ],
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -563,7 +563,7 @@ fn parse_implication() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -723,7 +723,7 @@ fn parse_in() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -836,7 +836,7 @@ fn parse_let() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -940,14 +940,14 @@ fn parse_for_all() {
                                         },
                                     },
                                 ),
-                                paren: Paren,
+                                span: Span,
                                 commit_point: None,
                             },
                         ],
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -1055,14 +1055,14 @@ fn parse_for_all_with_state() {
                                         },
                                     },
                                 ),
-                                paren: Paren,
+                                span: Span,
                                 commit_point: None,
                             },
                         ],
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -1130,7 +1130,7 @@ fn parse_if_let() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -1239,7 +1239,7 @@ fn parse_comprehension_expression() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -1383,7 +1383,7 @@ fn parse_comprehension_with_premises() {
                                             },
                                         },
                                     ),
-                                    paren: Paren,
+                                    span: Span,
                                     commit_point: None,
                                 },
                             ],
@@ -1406,7 +1406,7 @@ fn parse_comprehension_with_premises() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -1551,7 +1551,7 @@ fn parse_comprehension_with_premises2() {
                                             },
                                         },
                                     ),
-                                    paren: Paren,
+                                    span: Span,
                                     commit_point: None,
                                 },
                                 Premise {
@@ -1586,7 +1586,7 @@ fn parse_comprehension_with_premises2() {
                                             },
                                         },
                                     ),
-                                    paren: Paren,
+                                    span: Span,
                                     commit_point: None,
                                 },
                             ],
@@ -1609,7 +1609,7 @@ fn parse_comprehension_with_premises2() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -1814,7 +1814,7 @@ fn parse_scope_with_empty_state() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -1978,7 +1978,7 @@ fn parse_scope_with_state() {
                     },
                 },
             ),
-            paren: Paren,
+            span: Span,
             commit_point: None,
         }
     "#]]
@@ -2027,7 +2027,7 @@ fn codegen_let() {
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
-                                cause,
+                                cause: cause,
                             });
                     } else {
                         tracing::trace!(
@@ -2079,7 +2079,7 @@ fn codegen_if_let() {
                                     file: file.to_string(),
                                     line: line,
                                     column: column,
-                                    cause,
+                                    cause: cause,
                                 });
                         } else {
                             tracing::trace!(
@@ -2105,7 +2105,7 @@ fn codegen_if_let() {
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
-                                cause,
+                                cause: cause,
                             });
                     } else {
                         tracing::trace!(
@@ -2132,6 +2132,7 @@ fn codegen_if() {
                 stringify!(state.scope_has_label(label)),
                 vec![],
             );
+            #[allow(unused_braces)]
             if { state.scope_has_label(label) } {
                 child_proof_trees
                     .push(::formality_core::judgment::ProofTree::leaf(format!("{:?}", if_then)));
@@ -2151,7 +2152,7 @@ fn codegen_if() {
                             file: file.to_string(),
                             line: line,
                             column: column,
-                            cause,
+                            cause: cause,
                         });
                 } else {
                     tracing::trace!(
@@ -2175,7 +2176,7 @@ fn codegen_for_all() {
             kind: ast::PremiseKind::If(ast::If {
                 expression: syn::parse2(quote! { dummy_expression }).unwrap(),
             }),
-            paren: syn::token::Paren::default(),
+            span: Span::mixed_site(),
             commit_point: None,
         }]),
     };
@@ -2212,6 +2213,7 @@ fn codegen_for_all() {
                             stringify!(dummy_expression),
                             vec![],
                         );
+                        #[allow(unused_braces)]
                         if { dummy_expression } {
                             item_proof_trees
                                 .push(
@@ -2239,7 +2241,7 @@ fn codegen_for_all() {
                                         file: file.to_string(),
                                         line: line,
                                         column: column,
-                                        cause,
+                                        cause: cause,
                                     });
                             } else {
                                 tracing::trace!(
@@ -2313,7 +2315,7 @@ fn codegen_fail() {
                     __matched = true;
                 }
                 let cause = ::formality_core::judgment::RuleFailureCause::ExplicitFailure {
-                    message,
+                    message: message,
                 };
                 let file = file!();
                 let line = line!();
@@ -2329,7 +2331,7 @@ fn codegen_fail() {
                             file: file.to_string(),
                             line: line,
                             column: column,
-                            cause,
+                            cause: cause,
                         });
                 } else {
                     tracing::trace!(
@@ -2380,7 +2382,7 @@ fn codegen_implication_unit() {
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
-                                cause,
+                                cause: cause,
                             });
                     } else {
                         tracing::trace!(
@@ -2438,7 +2440,7 @@ fn codegen_implication_general() {
                                     file: file.to_string(),
                                     line: line,
                                     column: column,
-                                    cause,
+                                    cause: cause,
                                 });
                         } else {
                             tracing::trace!(
@@ -2464,7 +2466,7 @@ fn codegen_implication_general() {
                             file: file.to_string(),
                             line: line,
                             column: column,
-                            cause,
+                            cause: cause,
                         });
                 } else {
                     tracing::trace!(
@@ -2528,7 +2530,7 @@ fn codegen_in() {
                             file: file.to_string(),
                             line: line,
                             column: column,
-                            cause,
+                            cause: cause,
                         });
                 } else {
                     tracing::trace!(
@@ -2556,7 +2558,7 @@ fn codegen_scope() {
             kind: ast::PremiseKind::If(ast::If {
                 expression: syn::parse2(quote! { dummy_expression }).unwrap(),
             }),
-            paren: syn::token::Paren::default(),
+            span: Span::mixed_site(),
             commit_point: None,
         }]),
     };
@@ -2590,7 +2592,7 @@ fn codegen_scope() {
                                 file: file.to_string(),
                                 line: line,
                                 column: column,
-                                cause,
+                                cause: cause,
                             });
                     } else {
                         tracing::trace!(
@@ -2610,6 +2612,7 @@ fn codegen_scope() {
                             stringify!(dummy_expression),
                             vec![],
                         );
+                        #[allow(unused_braces)]
                         if { dummy_expression } {
                             inner_proof_trees
                                 .push(
@@ -2637,7 +2640,7 @@ fn codegen_scope() {
                                         file: file.to_string(),
                                         line: line,
                                         column: column,
-                                        cause,
+                                        cause: cause,
                                     });
                             } else {
                                 tracing::trace!(
@@ -2685,7 +2688,7 @@ fn codegen_scope() {
                                         file: file.to_string(),
                                         line: line,
                                         column: column,
-                                        cause,
+                                        cause: cause,
                                     });
                             } else {
                                 tracing::trace!(
@@ -2844,7 +2847,7 @@ fn codegen_commit_point() {
                                                                 file: file.to_string(),
                                                                 line: line,
                                                                 column: column,
-                                                                cause,
+                                                                cause: cause,
                                                             });
                                                     } else {
                                                         tracing::trace!(
@@ -2872,7 +2875,7 @@ fn codegen_commit_point() {
                                                             file: file.to_string(),
                                                             line: line,
                                                             column: column,
-                                                            cause,
+                                                            cause: cause,
                                                         });
                                                 } else {
                                                     tracing::trace!(
@@ -2927,7 +2930,7 @@ fn codegen_commit_point() {
                                                             __matched = true;
                                                         }
                                                         let cause = ::formality_core::judgment::RuleFailureCause::ExplicitFailure {
-                                                            message,
+                                                            message: message,
                                                         };
                                                         let file = file!();
                                                         let line = line!();
@@ -2944,7 +2947,7 @@ fn codegen_commit_point() {
                                                                     file: file.to_string(),
                                                                     line: line,
                                                                     column: column,
-                                                                    cause,
+                                                                    cause: cause,
                                                                 });
                                                         } else {
                                                             tracing::trace!(
@@ -2974,7 +2977,7 @@ fn codegen_commit_point() {
                                                                 file: file.to_string(),
                                                                 line: line,
                                                                 column: column,
-                                                                cause,
+                                                                cause: cause,
                                                             });
                                                     } else {
                                                         tracing::trace!(
@@ -3002,7 +3005,7 @@ fn codegen_commit_point() {
                                                             file: file.to_string(),
                                                             line: line,
                                                             column: column,
-                                                            cause,
+                                                            cause: cause,
                                                         });
                                                 } else {
                                                     tracing::trace!(

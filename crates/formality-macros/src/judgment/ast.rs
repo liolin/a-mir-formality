@@ -1,6 +1,5 @@
 use proc_macro2::Span;
 use syn::punctuated::Punctuated;
-use syn::token::Paren;
 use syn::{Attribute, Expr, Ident, LitStr, Pat, Token, Type, TypeInfer, Visibility};
 
 use std::collections::VecDeque;
@@ -122,7 +121,7 @@ pub struct Premises {
 #[derive(Debug, Clone)]
 pub struct Premise {
     pub kind: PremiseKind,
-    pub paren: Paren,
+    pub span: Span,
     pub commit_point: Option<Token![!]>,
 }
 

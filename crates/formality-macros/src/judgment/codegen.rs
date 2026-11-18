@@ -237,11 +237,18 @@ fn emit_rule(judgment: &Judgment, rule: &Rule) -> TokenStream {
 
     let child_proof_trees = internal_ident("child_proof_trees");
 
-    let premises = emit_premises(
-        rule.premises.clone(),
-        &rule.label.name.value(),
-        &child_proof_trees,
-    );
+    let mut premises = rule.premises.clone();
+    premises.premises.push_back(Premise {
+        kind: PremiseKind::Collect(Collect::Judgment {
+            judgment_name: judgment.name().clone(),
+            result_value: rule.conclusion.result.clone(),
+            label: rule.label.clone(),
+        }),
+        span: Span::mixed_site(),
+        commit_point: None,
+    });
+
+    let premises = emit_premises(premises, &rule.label.name.value(), &child_proof_trees);
 
     // TODO: Maybe move to its own function
     let rule_stream = quote! {
@@ -312,7 +319,7 @@ fn emit_premises(mut premises: Premises, name: &str, proof_trees: &Ident) -> Tok
         return TokenStream::new();
     };
 
-    let span = premise.paren.span.span();
+    let span = premise.span;
     let state = State {
         span,
         name,
@@ -353,7 +360,7 @@ pub(crate) fn emit_if_let(
     let body = emit_premises(rest, name, proof_trees);
     let record_failure = emit_record_failure(name, span);
 
-    quote! {
+    quote_spanned! {span=>
         match ::formality_core::judgment::try_catch(|| Ok(#expr)) {
             Ok(#value) => {
                 if let #p = &#value {
@@ -394,7 +401,7 @@ pub(crate) fn emit_if(
     let body = emit_premises(rest, name, proof_trees);
 
     // TODO: Get the arguments for better error reporting
-    quote! {
+    quote_spanned! {span=>
         #(
             let #argn = #arge;
         )*
@@ -409,6 +416,7 @@ pub(crate) fn emit_if(
                 )*
             ],
         );
+        #[allow(unused_braces)]
         if {
             #cond
         } {
@@ -522,6 +530,8 @@ pub(crate) fn emit_for_all(
     let debug_information = quote_spanned!(collection_span=> (file!(), line!(), column!()));
 
     // let collect = quote! { #next_carried_and_proof.push(((#(#with_var.clone(),)*), #item_proof_trees.clone())); };
+    // TODO: I do not like, that I modify the AST in codegen.
+    // Is there a better way?
     let mut for_all_body = for_all.body.clone();
     for_all_body.premises.push_back(Premise {
         kind: PremiseKind::Collect(Collect::Loop {
@@ -529,14 +539,14 @@ pub(crate) fn emit_for_all(
             with_var: with_var.clone(),
             item_proof_trees: item_proof_trees.clone(),
         }),
-        paren: Default::default(),
+        span,
         commit_point: None,
     });
     let inner = emit_premises(for_all_body, name, &item_proof_trees);
     let body = emit_premises(rest, name, &proof_trees);
     let record_failure = emit_record_failure(name, span);
 
-    quote! {
+    quote_spanned! {span=>
         {
             let #collection_var = #collection;
             let (#file, #line, #column) = #debug_information;
@@ -613,7 +623,7 @@ pub(crate) fn emit_fail(
     let cause = internal_ident("cause");
 
     let record_failure = emit_record_failure(name, span);
-    quote! {
+    quote_spanned! {span=>
         {
             #[allow(unused_variables)]
             let _ = &#proof_trees;
@@ -648,7 +658,8 @@ pub(crate) fn emit_let(
 
     let body = emit_premises(rest, name, proof_trees);
     let record_failure = emit_record_failure(name, span);
-    quote! {
+
+    quote_spanned! {span=>
         match ::formality_core::judgment::try_catch::<#t>(|| Ok(#expression)) {
             Ok(#p_var) => {
                 let #proof_tree = ::formality_core::judgment::ProofTree::leaf(format!("{} = {:?}", stringify!(#p), #p_var));
@@ -685,7 +696,7 @@ pub(crate) fn emit_in(
     let body = emit_premises(rest, name, proof_trees);
     let record_failure = emit_record_failure(name, span);
 
-    quote! {
+    quote_spanned! {span=>
         if let Err(#e) = ::formality_core::judgment::member_of(
             #expression,
             || stringify!(#expression).to_string(),
@@ -732,10 +743,12 @@ pub(crate) fn emit_comprehension(
     let next = internal_ident("next");
     let result = internal_ident("result");
 
+    // TODO: Move this to another stage, I do not want AST modification in codegen
     let def_collected: Let =
-        syn::parse2(quote! {let #collected: Vec<_> = Vec::new() }).expect("is always valid");
+        syn::parse2(quote_spanned! (span=> let #collected: Vec<_> = Vec::new()))
+            .expect("is always valid");
 
-    let col: Let = syn::parse2(quote! {
+    let col: Let = syn::parse2(quote_spanned! {span=>
         let #collected = {
             let mut #next = #collected.clone();
             #next.push(::formality_core::Upcast::upcast(&#value));
@@ -752,11 +765,11 @@ pub(crate) fn emit_comprehension(
     };
     for_all.body.premises.push_back(Premise {
         kind: PremiseKind::Let(col),
-        paren: Default::default(),
+        span: span,
         commit_point: None,
     });
 
-    let conclusion: Let = syn::parse2(quote! {
+    let conclusion: Let = syn::parse2(quote_spanned! {span=>
     let #p = {
         let #result: #t = #collected.iter().cloned().collect();
         #result
@@ -767,17 +780,17 @@ pub(crate) fn emit_comprehension(
         premises: vec![
             Premise {
                 kind: PremiseKind::Let(def_collected),
-                paren: Default::default(),
+                span,
                 commit_point: None,
             },
             Premise {
                 kind: PremiseKind::ForAll(for_all),
-                paren: Default::default(),
+                span,
                 commit_point: None,
             },
             Premise {
                 kind: PremiseKind::Let(conclusion),
-                paren: Default::default(),
+                span,
                 commit_point: None,
             },
         ]
@@ -787,7 +800,7 @@ pub(crate) fn emit_comprehension(
     let comprehension = emit_premises(premises, name, proof_trees);
     let body = emit_premises(rest, name, proof_trees);
 
-    quote! {
+    quote_spanned! {span=>
            #comprehension
            #body
     }
@@ -818,7 +831,7 @@ fn emit_implication_unit(
     let record_failure = emit_record_failure(name, span);
     let body = emit_premises(rest, name, proof_trees);
 
-    quote! {
+    quote_spanned! {span=>
         match ::formality_core::judgment::CheckProven::check_proven(
             #i,
         ) {
@@ -853,7 +866,7 @@ fn emit_implication_general(
 
     let record_failure = emit_record_failure(name, span);
     let body = emit_premises(rest, name, proof_trees);
-    quote! {
+    quote_spanned! {span=>
         if let Err(#e) = ::formality_core::judgment::EachProof::each_proof(
             #i,
             |(#value, #proof_tree)| {
@@ -922,12 +935,12 @@ pub(crate) fn emit_scope(
             with_var: with_var.clone(),
             inner_proof_trees: inner_proof_trees.clone(),
         }),
-        paren: Default::default(),
+        span,
         commit_point: None,
     });
     let inner = emit_premises(scope_body, name, &inner_proof_trees);
     let body = emit_premises(rest, name, proof_trees);
-    quote! {
+    quote_spanned! {span=>
         match ::formality_core::judgment::try_catch(|| Ok(#expression)) {
             Err(#e) => {
                 let #cause = #e;
@@ -988,15 +1001,10 @@ fn emit_record_failure(rule_name: &str, span: Span) -> TokenStream {
     let cause = internal_ident("cause");
     let failed_rules = internal_ident("failed_rules");
 
-    let span = span.clone();
-    let location = quote_spanned! {span=>
-                              let #file = file!();
-                              let #line = line!();
-                              let #column = column!();
-    };
-
-    quote! {
-        #location
+    quote_spanned! {span=>
+        let #file = file!();
+        let #line = line!();
+        let #column = column!();
 
         if __matched {
             tracing::debug!(
@@ -1042,14 +1050,16 @@ fn emit_collect(collect: &Collect, state: State) -> TokenStream {
             with_var,
             inner_proof_trees,
         } => {
-            quote! { #scope_proofs.push(((#(#with_var.clone(),)*), #inner_proof_trees.clone())); }
+            let span = state.span;
+            quote_spanned! (span=> #scope_proofs.push(((#(#with_var.clone(),)*), #inner_proof_trees.clone())); )
         }
         Collect::Loop {
             next,
             with_var,
             item_proof_trees,
         } => {
-            quote! { #next.push(((#(#with_var.clone(),)*), #item_proof_trees.clone())); }
+            let span = state.span;
+            quote_spanned! (span=> #next.push(((#(#with_var.clone(),)*), #item_proof_trees.clone())); )
         }
     }
 }

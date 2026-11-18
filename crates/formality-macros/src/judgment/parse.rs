@@ -231,10 +231,10 @@ impl Parse for Premises {
 
 impl Parse for Premise {
     fn parse(input: ParseStream) -> Result<Self> {
-        let paren;
+        let span;
         let kind = {
             let inner;
-            paren = parenthesized!(inner in input);
+            span = parenthesized!(inner in input).span.span();
 
             if inner.peek(Token![if]) && inner.peek2(Token![let]) {
                 PremiseKind::IfLet(inner.parse()?)
@@ -269,7 +269,7 @@ impl Parse for Premise {
 
         Ok(Premise {
             kind,
-            paren,
+            span,
             commit_point,
         })
     }
@@ -442,7 +442,7 @@ impl Parse for ComprehensionBody {
         let result = if input.is_empty() {
             let Some(Premise {
                 kind: PremiseKind::Implication(implication),
-                paren: _,
+                span: _,
                 commit_point: _,
             }) = premises.back()
             else {
@@ -532,7 +532,7 @@ impl Parse for Conclusion {
         let content;
         parenthesized!(content in input);
 
-        let name: Ident = content.parse()?;
+        let name = content.parse()?;
 
         let patterns = {
             let inner;
@@ -542,7 +542,7 @@ impl Parse for Conclusion {
 
         content.parse::<Token![=>]>()?;
 
-        let result: Expr = content.parse()?;
+        let result = content.parse()?;
 
         Ok(Conclusion {
             name,
