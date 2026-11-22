@@ -2,9 +2,12 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
 use syn::{spanned::Spanned, Attribute, BinOp, Expr, ExprBinary, ExprUnary, Ident, Pat, UnOp};
 
-use crate::judgment::ast::{
-    self, Argument, Ast, Binding, Collect, Comprehesion, Fail, ForAll, If, IfLet, Implication, In,
-    Judgment, Label, Let, Premise, PremiseKind, Premises, Rule, Scope, Signature,
+use crate::judgment::{
+    ast::{
+        self, Argument, Ast, Binding, Collect, Fail, ForAll, If, IfLet, Implication, In, Judgment,
+        Label, Let, Premise, PremiseKind, Premises, Rule, Scope, Signature,
+    },
+    internal_ident,
 };
 
 pub type Rust = TokenStream;
@@ -15,10 +18,6 @@ pub(crate) struct State<'a> {
     pub name: &'a str,
     pub proof_trees: &'a Ident,
     pub rest: Premises,
-}
-
-fn internal_ident(name: &str) -> Ident {
-    Ident::new(name, Span::mixed_site())
 }
 
 pub fn emit(judgment: Ast) -> Rust {
@@ -94,6 +93,8 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
     let name = judgment.name();
     let debug_input_name = judgment.debug_input_names();
 
+    let input = internal_ident("input");
+    let input_string = internal_ident("input_string");
     let output = internal_ident("output");
     let failed_rules = internal_ident("failed_rules");
     let cache = internal_ident("R");
@@ -109,7 +110,7 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
         #trivials
 
         let mut #failed_rules = ::formality_core::set![];
-        let input = __JudgmentStruct(#(#input_name),*);
+        let #input = __JudgmentStruct(#(#input_name),*);
         let #output = ::formality_core::judgment::execute_judgment::<
             __JudgmentStruct,
             #output_ty,
@@ -132,7 +133,7 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
             },
 
             // Input:
-            input.clone(),
+            #input.clone(),
 
             // Execute rules:
             |input: __JudgmentStruct| {
@@ -141,7 +142,7 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
                 #failed_rules.clear();
 
                 #[allow(unused)]
-                let input_string = format!("{:?}", input);
+                let #input_string = format!("{:?}", input);
                 #rules
                 #output
             },
@@ -151,7 +152,7 @@ fn emit_function_body(judgment: &Judgment) -> TokenStream {
             ::formality_core::ProvenSet::proven(#output)
         } else {
             ::formality_core::ProvenSet::failed_rules(
-                &input,
+                &#input,
                 ::formality_core::judgment::FailureLocation::caller(),
                 #failed_rules,
             )
@@ -334,7 +335,9 @@ fn emit_premises(mut premises: Premises, name: &str, proof_trees: &Ident) -> Tok
         PremiseKind::Fail(fail) => emit_fail(fail, state),
         PremiseKind::Implication(implication) => emit_implication(implication, state),
         PremiseKind::Let(let_) => emit_let(let_, state),
-        PremiseKind::Comprehension(comprehension) => emit_comprehension(comprehension, state),
+        PremiseKind::Comprehension(_comprehension) => {
+            unreachable!("Comprehension is consumed during the lowering phase")
+        }
         PremiseKind::In(in_) => emit_in(in_, state),
         PremiseKind::Scope(scope) => emit_scope(scope, state),
         PremiseKind::Collect(collect) => emit_collect(collect, state),
@@ -623,14 +626,14 @@ pub(crate) fn emit_fail(
     let cause = internal_ident("cause");
 
     let record_failure = emit_record_failure(name, span);
-    quote_spanned! {span=>
+    quote! {
         {
             #[allow(unused_variables)]
             let _ = &#proof_trees;
             let #message = format!(#fmt #(, #arg)*);
             #[allow(unused_assignments)]
             { __matched = true; }
-            let #cause = ::formality_core::judgment::RuleFailureCause::ExplicitFailure { #message };
+            let #cause = ::formality_core::judgment::RuleFailureCause::ExplicitFailure { message: #message };
             #record_failure
         }
     }
@@ -720,89 +723,6 @@ pub(crate) fn emit_in(
             let #cause = #e;
             #record_failure
         }
-    }
-}
-
-pub(crate) fn emit_comprehension(
-    comprehension: &Comprehesion,
-    State {
-        span,
-        name,
-        proof_trees,
-        rest,
-    }: State,
-) -> TokenStream {
-    let p = comprehension
-        .binding
-        .identifier()
-        .expect("should alway be a valid identifier");
-    let t = comprehension.binding.ty();
-    let value = &comprehension.body.result;
-
-    let collected = internal_ident("collected");
-    let next = internal_ident("next");
-    let result = internal_ident("result");
-
-    // TODO: Move this to another stage, I do not want AST modification in codegen
-    let def_collected: Let =
-        syn::parse2(quote_spanned! (span=> let #collected: Vec<_> = Vec::new()))
-            .expect("is always valid");
-
-    let col: Let = syn::parse2(quote_spanned! {span=>
-        let #collected = {
-            let mut #next = #collected.clone();
-            #next.push(::formality_core::Upcast::upcast(&#value));
-            #next
-        }
-    })
-    .expect("is always valid");
-
-    let mut for_all = ForAll {
-        identifier: comprehension.loop_var.clone(),
-        collection: comprehension.collection.clone(),
-        state: vec![collected.clone()],
-        body: comprehension.body.premises.clone(),
-    };
-    for_all.body.premises.push_back(Premise {
-        kind: PremiseKind::Let(col),
-        span: span,
-        commit_point: None,
-    });
-
-    let conclusion: Let = syn::parse2(quote_spanned! {span=>
-    let #p = {
-        let #result: #t = #collected.iter().cloned().collect();
-        #result
-    }})
-    .expect("is always valid");
-
-    let premises = Premises {
-        premises: vec![
-            Premise {
-                kind: PremiseKind::Let(def_collected),
-                span,
-                commit_point: None,
-            },
-            Premise {
-                kind: PremiseKind::ForAll(for_all),
-                span,
-                commit_point: None,
-            },
-            Premise {
-                kind: PremiseKind::Let(conclusion),
-                span,
-                commit_point: None,
-            },
-        ]
-        .into(),
-    };
-
-    let comprehension = emit_premises(premises, name, proof_trees);
-    let body = emit_premises(rest, name, proof_trees);
-
-    quote_spanned! {span=>
-           #comprehension
-           #body
     }
 }
 
@@ -1021,7 +941,7 @@ fn emit_record_failure(rule_name: &str, span: Span) -> TokenStream {
                     file: #file.to_string(),
                     line: #line,
                     column: #column,
-                    #cause,
+                    cause: #cause,
                 }
             );
         } else {

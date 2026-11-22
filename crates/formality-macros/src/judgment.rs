@@ -1,9 +1,13 @@
 #![expect(dead_code)]
 #![expect(unused_variables)]
 
+use proc_macro2::Span;
+use syn::Ident;
+
 mod analyze;
 mod ast;
 mod codegen;
+mod lowering;
 mod parse;
 #[cfg(test)]
 mod tests;
@@ -21,8 +25,17 @@ pub fn judgment(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         Err(err) => return err.into_compile_error().into(),
     };
 
-    let tokens = codegen::emit(model);
+    let lowered = match lowering::lower(model) {
+        Ok(lowered) => lowered,
+        Err(err) => return err.into_compile_error().into(),
+    };
+
+    let tokens = codegen::emit(lowered);
     proc_macro::TokenStream::from(tokens)
+}
+
+fn internal_ident(name: &str) -> Ident {
+    Ident::new(name, Span::mixed_site())
 }
 
 mod keyword {
