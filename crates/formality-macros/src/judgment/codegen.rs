@@ -263,22 +263,8 @@ fn emit_rule(judgment: &Judgment, rule: &Rule) -> TokenStream {
     };
     let match_and_rule = emit_match(judgment, rule, rule_stream);
 
-    let span = conclusion_name.span();
-    let wrong_name_in_conclusion = quote_spanned! {span=>
-                               // give the user a type error if the name they gave
-                               // in the conclusion is not the same as the name of the
-                               // function
-                               #[allow(dead_code)]
-                               struct WrongJudgmentNameInConclusion;
-                               const _: WrongJudgmentNameInConclusion = {
-                                   let #judgment_name = WrongJudgmentNameInConclusion;
-                                   #conclusion_name
-                               };
-    };
-
     quote! {
         {
-            #wrong_name_in_conclusion
             if let Some(__JudgmentStruct(#(#input_names),*)) = Some(&input) {
                 let __judgment_name = stringify!(#judgment_name);
                 let __attributes: Vec<(String, String)> = vec![
@@ -568,7 +554,6 @@ pub(crate) fn emit_for_all(
                     let (#(#with_var,)*) = &#loop_carried;
 
                     let #attributes = vec![("item".to_string(), format!("{:?}", #loop_var))];
-                    // I shadown the outer `child_proof_trees` delibertly, such that the generated code for the premises still uses the correct vector.
                     let mut #item_proof_trees = vec![];
                     let mut #next_carried_and_proof = vec![];
                     #inner

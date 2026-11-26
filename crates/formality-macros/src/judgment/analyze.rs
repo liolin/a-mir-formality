@@ -7,7 +7,7 @@ pub fn analyze(ast: Ast) -> syn::Result<Ast> {
         if rule.conclusion.patterns.len() < ast.signature.arguments.len() {
             return Err(syn::Error::new(
                 rule.conclusion.patterns.span(),
-                "fewer patterns in rule than arguments on fn blub",
+                "fewer patterns in rule than arguments on fn",
             ));
         }
 
@@ -15,6 +15,17 @@ pub fn analyze(ast: Ast) -> syn::Result<Ast> {
             return Err(syn::Error::new(
                 rule.conclusion.patterns.span(),
                 "more patterns in rule than arguments on fn",
+            ));
+        }
+
+        if rule.conclusion.name != *ast.name() {
+            return Err(syn::Error::new(
+                rule.conclusion.patterns.span(),
+                format!(
+                    "Wrong name in the conclusion: Got {}, expected {}",
+                    rule.conclusion.name,
+                    ast.name()
+                ),
             ));
         }
     }
